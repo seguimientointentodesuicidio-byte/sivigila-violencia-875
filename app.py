@@ -620,9 +620,9 @@ def modulo_formulario(spreadsheet):
             semana_epi = st.number_input("Semana epidemiológica *", min_value=1, max_value=53, value=1, step=1)
         with col2:
             antec_violencia = st.selectbox("¿Antecedente de violencia previa?",
-                                           options=["NO", "SI", "SIN INFORMACIÓN"])
-            conflicto_armado = st.radio("¿Hecho en marco del conflicto armado?",
-                                        options=["NO", "SI"], horizontal=True)
+                                           options=["", "NO", "SI", "SIN INFORMACIÓN"])
+            conflicto_armado = st.selectbox("¿Hecho en marco del conflicto armado?",
+                                            options=["", "NO", "SI"])
 
         eps_otra = ""
         if st.session_state.get("rol") != "EPS" and eps_seleccionada == "OTRA (especificar)":
@@ -635,24 +635,24 @@ def modulo_formulario(spreadsheet):
         col1, col2 = st.columns(2)
         with col1:
             nombres = st.text_input("Nombres *", placeholder="NOMBRES DE LA VÍCTIMA")
-            tipo_doc = st.selectbox("Tipo de documento *", options=TIPOS_DOCUMENTO, index=2)
+            tipo_doc = st.selectbox("Tipo de documento *", options=[""] + TIPOS_DOCUMENTO)
             edad = st.number_input("Edad *", min_value=0, max_value=120, value=0, step=1)
-            identidad_genero = st.selectbox("Identidad de género", options=IDENTIDADES_GENERO)
-            pertenencia_etnica = st.selectbox("Pertenencia étnica", options=PERTENENCIAS_ETNICAS, index=6)
+            identidad_genero = st.selectbox("Identidad de género", options=[""] + IDENTIDADES_GENERO)
+            pertenencia_etnica = st.selectbox("Pertenencia étnica", options=[""] + PERTENENCIAS_ETNICAS)
         with col2:
             apellidos = st.text_input("Apellidos *", placeholder="APELLIDOS DE LA VÍCTIMA")
             numero_doc = st.text_input("Número de documento *", placeholder="Solo números")
-            sexo = st.selectbox("Sexo *", options=["Masculino", "Femenino", "Indeterminado"])
-            orientacion_sexual = st.selectbox("Orientación sexual", options=ORIENTACIONES_SEXUALES)
+            sexo = st.selectbox("Sexo *", options=["", "Masculino", "Femenino", "Indeterminado"])
+            orientacion_sexual = st.selectbox("Orientación sexual", options=[""] + ORIENTACIONES_SEXUALES)
             municipio_residencia = st.selectbox("Municipio de residencia *", options=[""] + MUNICIPIOS_VALLE)
 
         col1, col2 = st.columns(2)
         with col1:
             curso_vida = calcular_curso_vida(edad)
             st.text_input("Curso de vida (automático)", value=curso_vida, disabled=True)
-            discapacidad = st.selectbox("Discapacidad", options=["NO", "SI"])
+            discapacidad = st.selectbox("Discapacidad", options=["", "NO", "SI"])
         with col2:
-            gestante = st.selectbox("Gestante", options=["NO APLICA", "NO", "SI"])
+            gestante = st.selectbox("Gestante", options=["", "NO APLICA", "NO", "SI"])
             semanas_gestacion = st.number_input("Semanas de gestación (solo si gestante = SI)",
                                                 min_value=0, max_value=42, value=0)
 
@@ -668,25 +668,25 @@ def modulo_formulario(spreadsheet):
         st.markdown("#### 🎯 Datos del Hecho")
         col1, col2 = st.columns(2)
         with col1:
-            modalidad = st.selectbox("Modalidad de la violencia *", options=MODALIDADES_VIOLENCIA)
-            fecha_hecho = st.date_input("Fecha del hecho *", value=date.today())
+            modalidad = st.selectbox("Modalidad de la violencia *", options=[""] + MODALIDADES_VIOLENCIA)
+            fecha_hecho = st.date_input("Fecha del hecho *", value=None)
             municipio_hecho = st.selectbox("Municipio del hecho *", options=[""] + MUNICIPIOS_VALLE)
-            escenario = st.selectbox("Escenario", options=ESCENARIOS)
+            escenario = st.selectbox("Escenario", options=[""] + ESCENARIOS)
         with col2:
             hora_hecho = st.time_input("Hora del hecho", value=None)
-            mecanismo = st.selectbox("Mecanismo de la agresión", options=MECANISMOS_AGRESION,
+            mecanismo = st.selectbox("Mecanismo de la agresión", options=[""] + MECANISMOS_AGRESION,
                                      help="Si la modalidad es NEGLIGENCIA Y ABANDONO, seleccione NO APLICA.")
-            ambito = st.selectbox("Ámbito", options=AMBITOS)
-            actividad_victima = st.selectbox("Actividad de la víctima", options=ACTIVIDADES_VICTIMA)
+            ambito = st.selectbox("Ámbito", options=[""] + AMBITOS)
+            actividad_victima = st.selectbox("Actividad de la víctima", options=[""] + ACTIVIDADES_VICTIMA)
 
         col1, col2 = st.columns(2)
         with col1:
             consumo_spa = st.selectbox("Consumo de SPA por la víctima",
-                                       options=["NO", "SI", "SIN INFORMACIÓN"])
-            jefatura_hogar = st.selectbox("¿Persona con jefatura de hogar?", options=["NO", "SI"])
+                                       options=["", "NO", "SI", "SIN INFORMACIÓN"])
+            jefatura_hogar = st.selectbox("¿Persona con jefatura de hogar?", options=["", "NO", "SI"])
         with col2:
             consumo_alcohol = st.selectbox("Consumo de alcohol por la víctima",
-                                           options=["NO", "SI", "SIN INFORMACIÓN"])
+                                           options=["", "NO", "SI", "SIN INFORMACIÓN"])
 
         st.markdown("---")
 
@@ -695,14 +695,14 @@ def modulo_formulario(spreadsheet):
         col1, col2 = st.columns(2)
         with col1:
             sexo_agresor = st.selectbox("Sexo del agresor",
-                                        options=["Masculino", "Femenino", "Intersexual", "Sin dato"])
-            parentesco_agresor = st.selectbox("Parentesco con la víctima", options=PARENTESCOS_AGRESOR)
-            convive_agresor = st.selectbox("¿Convive con el agresor?", options=["NO", "SI"])
+                                        options=["", "Masculino", "Femenino", "Intersexual", "Sin dato"])
+            parentesco_agresor = st.selectbox("Parentesco con la víctima", options=[""] + PARENTESCOS_AGRESOR)
+            convive_agresor = st.selectbox("¿Convive con el agresor?", options=["", "NO", "SI"])
         with col2:
             edad_agresor = st.number_input("Edad del agresor (0 = sin dato)",
                                            min_value=0, max_value=120, value=0)
             agresor_no_familiar = st.selectbox("Agresor no familiar (relación)",
-                                               options=["No aplica"] + RELACIONES_NO_FAMILIAR)
+                                               options=["", "No aplica"] + RELACIONES_NO_FAMILIAR)
 
         st.markdown("---")
 
@@ -710,14 +710,14 @@ def modulo_formulario(spreadsheet):
         st.markdown("#### 📋 Notificación y Atención Inicial")
         col1, col2 = st.columns(2)
         with col1:
-            fecha_notificacion = st.date_input("Fecha de notificación SIVIGILA *", value=date.today())
+            fecha_notificacion = st.date_input("Fecha de notificación SIVIGILA *", value=None)
             fecha_consulta = st.date_input("Fecha de consulta", value=None)
             fecha_inicio_sintomas = st.date_input("Fecha de inicio de síntomas", value=None)
             upgd_atencion = st.text_input("UPGD / IPS que atendió")
         with col2:
             municipio_atencion = st.selectbox("Municipio de la atención", options=[""] + MUNICIPIOS_VALLE)
             fecha_atencion = st.date_input("Fecha de la atención", value=None)
-            hospitalizado = st.selectbox("Hospitalizado", options=["NO", "SI", "NO APLICA"])
+            hospitalizado = st.selectbox("Hospitalizado", options=["", "NO", "SI", "NO APLICA"])
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -725,7 +725,7 @@ def modulo_formulario(spreadsheet):
         with col2:
             fecha_alta = st.date_input("Fecha de alta", value=None)
         with col3:
-            condicion_final = st.selectbox("Condición final", options=["VIVO", "MUERTO", "NO SABE"])
+            condicion_final = st.selectbox("Condición final", options=["", "VIVO", "MUERTO", "NO SABE"])
 
         fecha_defuncion = st.date_input("Fecha de defunción (solo si condición = MUERTO)", value=None)
 
@@ -735,7 +735,7 @@ def modulo_formulario(spreadsheet):
         st.markdown("#### 🧠 Atención Integral en Salud")
         st.caption("Solo componentes aplicables a violencia NO sexual.")
         col1, col2 = st.columns(2)
-        sino_na = ["NO", "SI", "NO APLICA"]
+        sino_na = ["", "NO", "SI", "NO APLICA"]
         with col1:
             atencion_sm = st.selectbox("Atención por Salud Mental", options=sino_na)
             fecha_sm = st.date_input("Fecha atención Salud Mental", value=None)
@@ -766,17 +766,17 @@ def modulo_formulario(spreadsheet):
         col1, col2 = st.columns(2)
         with col1:
             ruta_atencion = st.selectbox("¿En ruta de atención integral?",
-                                         options=["SI", "NO", "EN PROCESO"])
+                                         options=["", "SI", "NO", "EN PROCESO"])
             asiste_servicios = st.selectbox("¿Asiste a los servicios?",
-                                            options=["SI", "NO", "SIN CONTACTO"])
+                                            options=["", "SI", "NO", "SIN CONTACTO"])
             num_seguimientos = st.number_input("Número de seguimientos realizados",
                                                min_value=0, max_value=50, value=0)
         with col2:
             abandono_proceso = st.selectbox("¿Abandonó el proceso?",
-                                            options=["NO", "SI", "SIN INFORMACIÓN"])
+                                            options=["", "NO", "SI", "SIN INFORMACIÓN"])
             reincidencia = st.selectbox("¿Reincidencia / nuevo evento?",
-                                        options=["NO", "SI", "SIN INFORMACIÓN"])
-            estado_caso = st.selectbox("Estado del caso *", options=ESTADOS_CASO)
+                                        options=["", "NO", "SI", "SIN INFORMACIÓN"])
+            estado_caso = st.selectbox("Estado del caso *", options=[""] + ESTADOS_CASO)
 
         observaciones = st.text_area("Observaciones",
                                      placeholder="Bitácora de gestión: llamadas, notas, derivaciones...",
@@ -805,13 +805,25 @@ def modulo_formulario(spreadsheet):
                 errores.append("Apellidos es obligatorio.")
             if not numero_doc.strip():
                 errores.append("Número de documento es obligatorio.")
+            if not tipo_doc:
+                errores.append("Tipo de documento es obligatorio.")
+            if not sexo:
+                errores.append("Sexo es obligatorio.")
+            if not modalidad:
+                errores.append("Modalidad de la violencia es obligatoria.")
+            if not estado_caso:
+                errores.append("Estado del caso es obligatorio.")
             if not municipio_residencia:
                 errores.append("Municipio de residencia es obligatorio.")
             if not municipio_hecho:
                 errores.append("Municipio del hecho es obligatorio.")
+            if not fecha_hecho:
+                errores.append("Fecha del hecho es obligatoria.")
+            if not fecha_notificacion:
+                errores.append("Fecha de notificación SIVIGILA es obligatoria.")
             if edad == 0:
                 errores.append("Verifique que la edad sea correcta (actualmente es 0).")
-            if gestante == "SI" and sexo != "Femenino":
+            if gestante == "SI" and sexo and sexo != "Femenino":
                 errores.append("Si está gestante, el sexo debe ser Femenino.")
             if modalidad == "NEGLIGENCIA Y ABANDONO" and mecanismo not in ("NO APLICA", ""):
                 errores.append("Si la modalidad es NEGLIGENCIA Y ABANDONO, el mecanismo debe ser NO APLICA.")
