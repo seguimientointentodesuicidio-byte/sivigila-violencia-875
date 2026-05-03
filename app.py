@@ -879,11 +879,15 @@ def modulo_dashboard(spreadsheet):
         with col2:
             df_curso = df_f["curso_vida"].value_counts().reset_index()
             df_curso.columns = ["Curso de Vida", "Casos"]
+            df_curso["_orden"] = df_curso["Curso de Vida"].apply(
+                lambda x: CURSOS_VIDA.index(x) if x in CURSOS_VIDA else 99)
+            df_curso = df_curso.sort_values("_orden").drop(columns="_orden")
             fig = px.pie(df_curso, values="Casos", names="Curso de Vida",
                          title="Distribución por Curso de Vida",
+                         category_orders={"Curso de Vida": CURSOS_VIDA},
                          color_discrete_sequence=["#0D2137", "#1B3A5C", "#2E6B9E",
                                                   "#4A90C4", "#7FB3D8", "#B5D4E9"], hole=0.4)
-            fig.update_traces(textinfo="percent+value")
+            fig.update_traces(textinfo="percent+value", sort=False)
             st.plotly_chart(fig, use_container_width=True)
 
         df_estado = df_f["estado_caso"].value_counts().reset_index()
@@ -918,7 +922,8 @@ def modulo_dashboard(spreadsheet):
         if not df_cv_estado.empty:
             fig = px.bar(df_cv_estado, x="curso_vida", y="Casos", color="estado_caso",
                          title="Estado del Caso por Curso de Vida",
-                         barmode="group", text="Casos")
+                         barmode="group", text="Casos",
+                         category_orders={"curso_vida": CURSOS_VIDA})
             fig.update_traces(textposition="outside")
             fig.update_layout(xaxis_tickangle=-30)
             st.plotly_chart(fig, use_container_width=True)
