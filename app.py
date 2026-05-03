@@ -1068,7 +1068,9 @@ def modulo_dashboard(spreadsheet):
             df_mun = df_mun.sort_values("Casos", ascending=True)
             fig_mun = px.bar(df_mun, x="Casos", y="Municipio", orientation="h",
                              title="Casos por Municipio del Hecho",
-                             color="Casos", color_continuous_scale="Reds")
+                             color="Casos", color_continuous_scale="Reds",
+                             text="Casos")
+            fig_mun.update_traces(textposition="outside")
             fig_mun.update_layout(height=max(400, len(df_mun) * 28),
                                   showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig_mun, use_container_width=True)
@@ -1078,7 +1080,9 @@ def modulo_dashboard(spreadsheet):
             df_eps.columns = ["EPS", "Casos"]
             fig_eps = px.bar(df_eps, x="EPS", y="Casos",
                              title="Casos por EPS",
-                             color="Casos", color_continuous_scale="Blues")
+                             color="Casos", color_continuous_scale="Blues",
+                             text="Casos")
+            fig_eps.update_traces(textposition="outside")
             fig_eps.update_layout(xaxis_tickangle=-45, height=400,
                                   showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig_eps, use_container_width=True)
@@ -1122,7 +1126,9 @@ def modulo_dashboard(spreadsheet):
             df_mec = df_mec.sort_values("Casos", ascending=True)
             fig_mec = px.bar(df_mec, x="Casos", y="Mecanismo", orientation="h",
                              title="Mecanismo de Agresión más Frecuente",
-                             color="Casos", color_continuous_scale="Oranges")
+                             color="Casos", color_continuous_scale="Oranges",
+                             text="Casos")
+            fig_mec.update_traces(textposition="outside")
             fig_mec.update_layout(height=max(400, len(df_mec) * 32),
                                   showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig_mec, use_container_width=True)
@@ -1133,7 +1139,9 @@ def modulo_dashboard(spreadsheet):
             df_esc.columns = ["Escenario", "Casos"]
             fig_esc = px.bar(df_esc, x="Escenario", y="Casos",
                              title="Escenario más Frecuente",
-                             color="Casos", color_continuous_scale="Purples")
+                             color="Casos", color_continuous_scale="Purples",
+                             text="Casos")
+            fig_esc.update_traces(textposition="outside")
             fig_esc.update_layout(xaxis_tickangle=-45, height=400,
                                   showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig_esc, use_container_width=True)
@@ -1143,7 +1151,9 @@ def modulo_dashboard(spreadsheet):
             df_amb.columns = ["Ámbito", "Casos"]
             fig_amb = px.bar(df_amb, x="Ámbito", y="Casos",
                              title="Distribución por Ámbito",
-                             color="Casos", color_continuous_scale="Teal")
+                             color="Casos", color_continuous_scale="Teal",
+                             text="Casos")
+            fig_amb.update_traces(textposition="outside")
             fig_amb.update_layout(xaxis_tickangle=-45, height=400,
                                   showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig_amb, use_container_width=True)
@@ -1153,19 +1163,21 @@ def modulo_dashboard(spreadsheet):
         df_sem = df_sem.sort_values("semana_epidemiologica")
         fig_sem = px.line(df_sem, x="semana_epidemiologica", y="Casos",
                           title="Tendencia de Casos por Semana Epidemiológica",
-                          markers=True)
+                          markers=True, text="Casos")
+        fig_sem.update_traces(textposition="top center",
+                              line_color=COLOR_AZUL_OSCURO, marker_color=COLOR_ROJO_ALERTA)
         fig_sem.update_layout(xaxis_title="Semana Epidemiológica", yaxis_title="Número de Casos")
-        fig_sem.update_traces(line_color=COLOR_AZUL_OSCURO, marker_color=COLOR_ROJO_ALERTA)
         st.plotly_chart(fig_sem, use_container_width=True)
 
         # Modalidad por curso de vida
         df_cross = df_filtrado.groupby(["curso_vida", "modalidad_violencia"]).size().reset_index(name="Casos")
         fig_cross = px.bar(df_cross, x="curso_vida", y="Casos", color="modalidad_violencia",
                            title="Modalidad de Violencia por Curso de Vida",
-                           barmode="group",
+                           barmode="group", text="Casos",
                            color_discrete_map={"FÍSICA": "#D32F2F",
                                                "PSICOLÓGICA": "#F9A825",
                                                "NEGLIGENCIA Y ABANDONO": "#9C27B0"})
+        fig_cross.update_traces(textposition="outside")
         fig_cross.update_layout(xaxis_tickangle=-30)
         st.plotly_chart(fig_cross, use_container_width=True)
 
@@ -1173,7 +1185,7 @@ def modulo_dashboard(spreadsheet):
         df_estado.columns = ["Estado", "Casos"]
         fig_estado = px.bar(df_estado, x="Estado", y="Casos",
                             title="Distribución por Estado del Caso",
-                            color="Estado",
+                            color="Estado", text="Casos",
                             color_discrete_map={
                                 "ACTIVO": "#F9A825",
                                 "CERRADO": "#4CAF50",
@@ -1182,6 +1194,7 @@ def modulo_dashboard(spreadsheet):
                                 "SIN CONTACTO": "#9E9E9E",
                                 "REMITIDO A OTRA EPS": "#FF9800"
                             })
+        fig_estado.update_traces(textposition="outside")
         fig_estado.update_layout(showlegend=False)
         st.plotly_chart(fig_estado, use_container_width=True)
 
@@ -1192,7 +1205,9 @@ def modulo_dashboard(spreadsheet):
             df_par.columns = ["Parentesco", "Casos"]
             fig_par = px.bar(df_par, x="Parentesco", y="Casos",
                              title="Parentesco del Agresor con la Víctima",
-                             color="Casos", color_continuous_scale="Reds")
+                             color="Casos", color_continuous_scale="Reds",
+                             text="Casos")
+            fig_par.update_traces(textposition="outside")
             fig_par.update_layout(xaxis_tickangle=-30,
                                   showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig_par, use_container_width=True)
@@ -1210,7 +1225,9 @@ def modulo_dashboard(spreadsheet):
         df_conv.columns = ["¿Convive con agresor?", "Casos"]
         fig_conv = px.bar(df_conv, x="¿Convive con agresor?", y="Casos",
                           title="¿La víctima convive con el agresor?",
-                          color="Casos", color_continuous_scale="Reds")
+                          color="Casos", color_continuous_scale="Reds",
+                          text="Casos")
+        fig_conv.update_traces(textposition="outside")
         fig_conv.update_layout(showlegend=False, coloraxis_showscale=False)
         st.plotly_chart(fig_conv, use_container_width=True)
 
