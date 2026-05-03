@@ -151,7 +151,7 @@ ESTADOS_CASO = [
     "REMITIDO A OTRA EPS", "FALLECIDO", "SIN CONTACTO"
 ]
 
-# Esquema reducido (39 columnas) - alineado con el formulario
+# Esquema reducido (33 columnas) - alineado con ficha SIVIGILA 875 pura
 COLUMNAS_DATOS = [
     "id", "fecha_digitacion", "funcionario_reporta",
     "eps_reporta", "semana_epidemiologica", "antec_violencia",
@@ -159,9 +159,7 @@ COLUMNAS_DATOS = [
     "edad", "sexo", "curso_vida", "municipio_residencia",
     "fecha_evento", "upgd_atencion", "municipio_atencion", "fecha_atencion",
     "atencion_salud_mental", "fecha_salud_mental",
-    "valoracion_psicologia", "fecha_psicologia",
-    "valoracion_psiquiatria", "fecha_psiquiatria",
-    "atencion_trabajo_social", "remision_proteccion", "reporte_autoridades",
+    "remision_proteccion", "reporte_autoridades",
     "seguimiento_1", "seguimiento_2", "seguimiento_3",
     "ruta_atencion_integral", "asiste_servicios", "num_seguimientos_realizados",
     "abandono_proceso", "reincidencia_nuevo_evento", "estado_caso", "observaciones",
@@ -568,17 +566,8 @@ def modulo_formulario(spreadsheet):
         with col1:
             atencion_sm = st.selectbox("Atención por Salud Mental", options=sino_na)
             fecha_sm = st.date_input("Fecha atención Salud Mental", value=None)
-            val_psicologia = st.selectbox("Valoración por Psicología", options=sino_na)
-            fecha_psicologia = st.date_input("Fecha primera atención Psicología", value=None)
         with col2:
-            val_psiquiatria = st.selectbox("Valoración por Psiquiatría", options=sino_na)
-            fecha_psiquiatria = st.date_input("Fecha primera atención Psiquiatría", value=None)
-            atencion_ts = st.selectbox("Atención Trabajo Social", options=sino_na)
-
-        col1, col2 = st.columns(2)
-        with col1:
             remision_proteccion = st.selectbox("Remisión a protección (ICBF, Comisaría)", options=sino_na)
-        with col2:
             reporte_autoridades = st.selectbox("Reporte a autoridades (Fiscalía, Policía, URI, CTI)",
                                                options=sino_na)
 
@@ -683,11 +672,6 @@ def modulo_formulario(spreadsheet):
                         "fecha_atencion": str(fecha_atencion) if fecha_atencion else "",
                         "atencion_salud_mental": atencion_sm,
                         "fecha_salud_mental": str(fecha_sm) if fecha_sm else "",
-                        "valoracion_psicologia": val_psicologia,
-                        "fecha_psicologia": str(fecha_psicologia) if fecha_psicologia else "",
-                        "valoracion_psiquiatria": val_psiquiatria,
-                        "fecha_psiquiatria": str(fecha_psiquiatria) if fecha_psiquiatria else "",
-                        "atencion_trabajo_social": atencion_ts,
                         "remision_proteccion": remision_proteccion,
                         "reporte_autoridades": reporte_autoridades,
                         "seguimiento_1": seguimiento_1,
@@ -941,37 +925,6 @@ def modulo_dashboard(spreadsheet):
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
         with col2:
-            df_psic = df_f["valoracion_psicologia"].value_counts().reset_index()
-            df_psic.columns = ["Valoración", "Casos"]
-            fig = px.bar(df_psic, x="Valoración", y="Casos",
-                         title="Valoración por Psicología",
-                         color="Casos", color_continuous_scale="Teal", text="Casos")
-            fig.update_traces(textposition="outside")
-            fig.update_layout(showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            df_psiq = df_f["valoracion_psiquiatria"].value_counts().reset_index()
-            df_psiq.columns = ["Valoración", "Casos"]
-            fig = px.bar(df_psiq, x="Valoración", y="Casos",
-                         title="Valoración por Psiquiatría",
-                         color="Casos", color_continuous_scale="Purples", text="Casos")
-            fig.update_traces(textposition="outside")
-            fig.update_layout(showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            df_ts = df_f["atencion_trabajo_social"].value_counts().reset_index()
-            df_ts.columns = ["Atención", "Casos"]
-            fig = px.bar(df_ts, x="Atención", y="Casos",
-                         title="Atención Trabajo Social",
-                         color="Casos", color_continuous_scale="Greens", text="Casos")
-            fig.update_traces(textposition="outside")
-            fig.update_layout(showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
             df_rp = df_f["remision_proteccion"].value_counts().reset_index()
             df_rp.columns = ["Remisión", "Casos"]
             fig = px.bar(df_rp, x="Remisión", y="Casos",
@@ -980,7 +933,9 @@ def modulo_dashboard(spreadsheet):
             fig.update_traces(textposition="outside")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
-        with col2:
+
+        col1, col2 = st.columns(2)
+        with col1:
             df_ra = df_f["reporte_autoridades"].value_counts().reset_index()
             df_ra.columns = ["Reporte", "Casos"]
             fig = px.bar(df_ra, x="Reporte", y="Casos",
@@ -989,9 +944,7 @@ def modulo_dashboard(spreadsheet):
             fig.update_traces(textposition="outside")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
+        with col2:
             df_as = df_f["asiste_servicios"].value_counts().reset_index()
             df_as.columns = ["Asistencia", "Casos"]
             fig = px.bar(df_as, x="Asistencia", y="Casos",
@@ -1000,15 +953,15 @@ def modulo_dashboard(spreadsheet):
             fig.update_traces(textposition="outside")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            df_ab = df_f["abandono_proceso"].value_counts().reset_index()
-            df_ab.columns = ["Abandono", "Casos"]
-            fig = px.bar(df_ab, x="Abandono", y="Casos",
-                         title="¿Abandonó el proceso?",
-                         color="Casos", color_continuous_scale="Reds", text="Casos")
-            fig.update_traces(textposition="outside")
-            fig.update_layout(showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
+
+        df_ab = df_f["abandono_proceso"].value_counts().reset_index()
+        df_ab.columns = ["Abandono", "Casos"]
+        fig = px.bar(df_ab, x="Abandono", y="Casos",
+                     title="¿Abandonó el proceso?",
+                     color="Casos", color_continuous_scale="Reds", text="Casos")
+        fig.update_traces(textposition="outside")
+        fig.update_layout(showlegend=False, coloraxis_showscale=False)
+        st.plotly_chart(fig, use_container_width=True)
 
     # ---- TAB 4: Alertas ----
     with tab4:
@@ -1199,27 +1152,10 @@ def modulo_edicion(spreadsheet):
                                      if registro.get("atencion_salud_mental", "") in sino_na else 0)
                 fsm_e = st.date_input("Fecha Salud Mental",
                                       value=parse_date_safe(registro.get("fecha_salud_mental")))
-                vp_e = st.selectbox("Valoración Psicología", options=sino_na,
-                                    index=sino_na.index(registro.get("valoracion_psicologia", "NO"))
-                                    if registro.get("valoracion_psicologia", "") in sino_na else 0)
-                fps_e = st.date_input("Fecha Psicología",
-                                      value=parse_date_safe(registro.get("fecha_psicologia")))
             with col2:
-                vpq_e = st.selectbox("Valoración Psiquiatría", options=sino_na,
-                                     index=sino_na.index(registro.get("valoracion_psiquiatria", "NO"))
-                                     if registro.get("valoracion_psiquiatria", "") in sino_na else 0)
-                fpq_e = st.date_input("Fecha Psiquiatría",
-                                      value=parse_date_safe(registro.get("fecha_psiquiatria")))
-                ats_e = st.selectbox("Atención Trabajo Social", options=sino_na,
-                                     index=sino_na.index(registro.get("atencion_trabajo_social", "NO"))
-                                     if registro.get("atencion_trabajo_social", "") in sino_na else 0)
-
-            col1, col2 = st.columns(2)
-            with col1:
                 rp_e = st.selectbox("Remisión a protección", options=sino_na,
                                     index=sino_na.index(registro.get("remision_proteccion", "NO"))
                                     if registro.get("remision_proteccion", "") in sino_na else 0)
-            with col2:
                 ra_e = st.selectbox("Reporte a autoridades", options=sino_na,
                                     index=sino_na.index(registro.get("reporte_autoridades", "NO"))
                                     if registro.get("reporte_autoridades", "") in sino_na else 0)
@@ -1287,11 +1223,6 @@ def modulo_edicion(spreadsheet):
                     "fecha_atencion": str(fat_e) if fat_e else "",
                     "atencion_salud_mental": asm_e,
                     "fecha_salud_mental": str(fsm_e) if fsm_e else "",
-                    "valoracion_psicologia": vp_e,
-                    "fecha_psicologia": str(fps_e) if fps_e else "",
-                    "valoracion_psiquiatria": vpq_e,
-                    "fecha_psiquiatria": str(fpq_e) if fpq_e else "",
-                    "atencion_trabajo_social": ats_e,
                     "remision_proteccion": rp_e,
                     "reporte_autoridades": ra_e,
                     "seguimiento_1": seg1_e,
@@ -1576,11 +1507,6 @@ def transformar_base_875(df):
             "fecha_atencion": _fmt_fecha(row.get("fec_con_")),
             "atencion_salud_mental": "SI" if _to_int_safe(row.get("ac_mental")) == 1 else "NO",
             "fecha_salud_mental": "",
-            "valoracion_psicologia": "NO",
-            "fecha_psicologia": "",
-            "valoracion_psiquiatria": "NO",
-            "fecha_psiquiatria": "",
-            "atencion_trabajo_social": "NO",
             "remision_proteccion": "SI" if _to_int_safe(row.get("remit_prot")) == 1 else "NO",
             "reporte_autoridades": reporte,
             "seguimiento_1": "",
