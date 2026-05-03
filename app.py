@@ -481,7 +481,7 @@ def crear_usuario(spreadsheet, usuario, password, nombre_completo, rol, eps_asig
 
 def filtrar_por_rol(df):
     """Filtra el DataFrame según el rol del usuario logueado."""
-    if st.session_state.get("rol") == "SECRETARIA":
+    if st.session_state.get("rol") == "SECRETARÍA":
         return df
     eps_usuario = st.session_state.get("eps_asignada", "")
     if eps_usuario and not df.empty:
@@ -571,7 +571,8 @@ def mostrar_sidebar():
             "✏️ Editar / Actualizar Caso",
             "📥 Exportar Datos"
         ]
-        if st.session_state.get("rol") == "SECRETARIA":
+        if st.session_state.get("rol") == "SECRETARÍA":
+            opciones.append("📂 Cargar Base Histórica")
             opciones.append("⚙️ Gestionar Usuarios")
 
         pagina = st.radio("Navegación", opciones, label_visibility="collapsed")
@@ -1823,7 +1824,7 @@ def modulo_gestion_usuarios(spreadsheet):
     </div>
     """, unsafe_allow_html=True)
 
-    if st.session_state.get("rol") != "SECRETARIA":
+    if st.session_state.get("rol") != "SECRETARÍA":
         st.error("⛔ No tiene permisos para acceder a este módulo.")
         return
 
@@ -1851,7 +1852,7 @@ def modulo_gestion_usuarios(spreadsheet):
             confirmar_password = st.text_input("Confirmar contraseña *", type="password")
         with col2:
             nuevo_nombre = st.text_input("Nombre completo *", placeholder="Ej: María García López")
-            nuevo_rol = st.selectbox("Rol *", options=["EPS", "SECRETARIA"])
+            nuevo_rol = st.selectbox("Rol *", options=["EPS", "SECRETARÍA"])
             nueva_eps = st.selectbox("EPS asignada (solo para rol EPS)",
                                      options=["N/A"] + [e for e in EPS_LISTA if e != "OTRA (especificar)"])
 
@@ -1873,6 +1874,438 @@ def modulo_gestion_usuarios(spreadsheet):
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")
+
+
+# ============================================================
+# MÓDULO 6: CARGA DE BASE HISTÓRICA (solo SECRETARÍA)
+# ============================================================
+
+# Mapeo de códigos del archivo SIVIGILA al esquema del aplicativo
+MAP_NATURALEZA_MODALIDAD = {
+    1: "FÍSICA",
+    2: "PSICOLÓGICA",
+    3: "NEGLIGENCIA Y ABANDONO",
+}
+
+MAP_MECANISMO = {
+    1: "Ahorcamiento/estrangulamiento",
+    2: "Caídas",
+    3: "Contundente",
+    4: "Cortopunzante",
+    11: "Proyectil arma de fuego",
+    12: "Quemadura por fuego",
+    13: "Quemadura por ácido",
+    14: "Quemadura por líquido hirviente",
+    15: "Otros",
+    16: "Sustancias domésticas",
+}
+
+MAP_ESCENARIO = {
+    1: "Vía pública",
+    2: "Vivienda",
+    3: "Establecimiento educativo",
+    4: "Lugar de trabajo",
+    7: "Otro",
+    8: "Comercio",
+    9: "Espacios abiertos",
+    10: "Lugares con expendio de alcohol",
+    11: "Institución de salud",
+    12: "Área deportiva",
+}
+
+MAP_AMBITO = {
+    1: "Escolar",
+    2: "Laboral",
+    3: "Institucional",
+    4: "Virtual",
+    5: "Comunitario",
+    6: "Hogar",
+    7: "Otros",
+}
+
+MAP_PARENTESCO = {
+    9: "Padre",
+    10: "Madre",
+    22: "Pareja",
+    23: "Ex-Pareja",
+    24: "Otro familiar",
+    25: "Ninguno",
+}
+
+MAP_REL_NO_FAMILIAR = {
+    1: "Profesor",
+    2: "Amigo",
+    3: "Compañero de trabajo",
+    4: "Compañero de estudio",
+    6: "Desconocido",
+    7: "Vecino",
+    8: "Conocido sin trato",
+    9: "Sin información",
+    10: "Otro",
+    11: "Jefe",
+    12: "Sacerdote/Pastor",
+    13: "Servidor público",
+}
+
+MAP_SEXO = {"M": "Masculino", "F": "Femenino", "I": "Indeterminado"}
+MAP_SEXO_AGRESOR = {"M": "Masculino", "F": "Femenino", "I": "Intersexual"}
+
+MAP_IDEN_GENERO = {1: "Hombre", 2: "Mujer", 3: "Hombre trans", 4: "Mujer trans", 5: "Otra"}
+MAP_ORIENT_SEX = {1: "Heterosexual", 2: "Gay/Lesbiana", 3: "Bisexual", 4: "Otra"}
+MAP_ETNIA = {1: "Indígena", 2: "Rom/Gitano", 3: "Raizal", 4: "Palenquero",
+             5: "Negro/Mulato/Afrocolombiano", 6: "Otro"}
+
+MAP_ACTIVIDAD = {
+    13: "Líder cívico", 24: "Estudiante", 26: "Otro",
+    28: "Trabajador doméstico", 29: "Persona en situación de prostitución",
+    30: "Campesino/a", 31: "Persona dedicada al hogar",
+    32: "Cuidador", 33: "Ninguna",
+}
+
+# Mapeo de EAPB del archivo a la lista oficial del aplicativo
+MAP_EAPB = {
+    "ASMET SALUD": "ASMET SALUD",
+    "ASOCIACION INDIGENA DEL CAUCA": "ASOCIACIÓN INDÍGENA DEL CAUCA EPSI",
+    "C.C.F. COMFACHOCO": "COMFACHOCÓ",
+    "CAPITAL SALUD EPSS S.A.S.": "CAPITAL SALUD",
+    "COMFENALCO": "COMFENALCO VALLE",
+    "COMPENSAR E.P.S.": "COMPENSAR",
+    "COMPENSAR ENTIDAD PROMOTORA DE SALUD.": "COMPENSAR",
+    "COOSALUD": "COOSALUD",
+    "ECOPETROL": "OTRA (especificar)",
+    "EMMSANAR": "EMSSANAR",
+    "EMSSANAR": "EMSSANAR",
+    "EPS FAMISANAR LTDA.": "FAMISANAR",
+    "EPS SANITAS - CM": "SANITAS",
+    "FIDUPREVISORA S.A": "OTRA (especificar)",
+    "FONDO DE PASIVO SOCIAL DE FERROCARRILES NACIONALES DE COLOMBIA.": "FONDO PASIVO SOCIAL FERROCARRILES",
+    "FUERZAS MILITARES": "OTRA (especificar)",
+    "MALLAMAS - EMPRESA PROMOTORA DE SALUD MALLAMAS EPS INDIGENA": "MALLAMAS EPSI",
+    "MUTUAL SER": "MUTUAL SER",
+    "NUEVA EPS": "NUEVA EPS",
+    "POLICIA NACIONAL": "OTRA (especificar)",
+    "RES FONDO PRESTACION SOCIAL CO": "OTRA (especificar)",
+    "S.O.S": "SOS (SERVICIO OCCIDENTAL DE SALUD)",
+    "S.O.S.": "SOS (SERVICIO OCCIDENTAL DE SALUD)",
+    "SALUD TOTAL": "SALUD TOTAL",
+    "SANITAS E.P.S. S.A.": "SANITAS",
+    "SAVIA SALUD SUBSIDIADO": "SAVIA SALUD",
+    "SURA": "SURA",
+}
+
+
+def _to_int_safe(val):
+    """Convierte a int tolerante a NaN, '' y strings."""
+    try:
+        if pd.isna(val):
+            return None
+        return int(float(str(val).strip()))
+    except (ValueError, TypeError):
+        return None
+
+
+def _fmt_fecha(val):
+    """Formatea fecha YYYY-MM-DD o vacío."""
+    if pd.isna(val) or str(val).strip() in ("", "None", "NaT"):
+        return ""
+    try:
+        return pd.to_datetime(val, dayfirst=True, errors="coerce").strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def _si_no(val):
+    """Convierte 1/2 a SI/NO."""
+    v = _to_int_safe(val)
+    if v == 1:
+        return "SI"
+    if v == 2:
+        return "NO"
+    return "SIN INFORMACIÓN"
+
+
+def transformar_base_875(df):
+    """Transforma el DataFrame del archivo histórico al esquema COLUMNAS_DATOS.
+
+    Filtra previamente los registros de violencia sexual
+    (descarta filas donde 'naturaleza' no esté en {1, 2, 3}).
+    """
+    # Filtrar violencia sexual: solo conservar naturaleza 1/2/3
+    df = df.copy()
+    df["_nat_int"] = df["naturaleza"].apply(_to_int_safe)
+    n_inicial = len(df)
+    df_no_sexual = df[df["_nat_int"].isin([1, 2, 3])].copy()
+    n_descartados = n_inicial - len(df_no_sexual)
+
+    registros = []
+    for _, row in df_no_sexual.iterrows():
+        # EPS
+        eps_raw = str(row.get("EAPB", "")).strip()
+        eps_final = MAP_EAPB.get(eps_raw, "OTRA (especificar)")
+
+        # Edad
+        edad = _to_int_safe(row.get("edad_")) or 0
+
+        # Nombres / apellidos (componer desde 4 columnas)
+        pri_nom = str(row.get("pri_nom_", "")).strip().upper()
+        seg_nom = str(row.get("seg_nom_", "")).strip().upper()
+        pri_ape = str(row.get("pri_ape_", "")).strip().upper()
+        seg_ape = str(row.get("seg_ape_", "")).strip().upper()
+        nombres = (pri_nom + " " + seg_nom).replace("NAN", "").strip()
+        apellidos = (pri_ape + " " + seg_ape).replace("NAN", "").strip()
+
+        # Documento (limpiar .0 que pandas agrega a numéricos)
+        num_doc = str(row.get("num_ide_", "")).strip()
+        if num_doc.endswith(".0"):
+            num_doc = num_doc[:-2]
+
+        # Modalidad
+        modalidad = MAP_NATURALEZA_MODALIDAD.get(row["_nat_int"], "FÍSICA")
+
+        # Mecanismo (NEGLIGENCIA → NO APLICA)
+        mec_int = _to_int_safe(row.get("mecanismo_utilizado_para_la_agresión"))
+        if modalidad == "NEGLIGENCIA Y ABANDONO":
+            mecanismo = "NO APLICA"
+        else:
+            mecanismo = MAP_MECANISMO.get(mec_int, "NO APLICA") if mec_int else "NO APLICA"
+
+        # Gestante
+        gp_gest = _to_int_safe(row.get("gp_gestan"))
+        gestante = "SI" if gp_gest == 1 else ("NO" if gp_gest == 2 else "NO APLICA")
+        sem_gest = _to_int_safe(row.get("sem_ges_")) or 0
+
+        # Discapacidad
+        gp_disc = _to_int_safe(row.get("gp_discapa"))
+        discapacidad = "SI" if gp_disc == 1 else "NO"
+
+        # Grupos poblacionales
+        gp_lista = []
+        if _to_int_safe(row.get("gp_desplaz")) == 1:
+            gp_lista.append("Desplazado")
+        if _to_int_safe(row.get("gp_migrant")) == 1:
+            gp_lista.append("Migrante")
+        if _to_int_safe(row.get("gp_carcela")) == 1:
+            gp_lista.append("PPL (Privado de la libertad)")
+        if _to_int_safe(row.get("gp_pobicbf")) == 1:
+            gp_lista.append("ICBF")
+        if _to_int_safe(row.get("gp_mad_com")) == 1:
+            gp_lista.append("Madre comunitaria")
+        if _to_int_safe(row.get("gp_desmovi")) == 1:
+            gp_lista.append("Desmovilizado")
+        if _to_int_safe(row.get("gp_vic_vio")) == 1:
+            gp_lista.append("Víctima del conflicto armado")
+
+        # Reporte autoridades
+        reporte = "SI" if _to_int_safe(row.get("inf_aut")) == 1 else "NO"
+
+        registro = {
+            "id": generar_id(),
+            "fecha_digitacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "funcionario_reporta": "CARGA HISTÓRICA",
+            "eps_reporta": eps_final,
+            "semana_epidemiologica": str(_to_int_safe(row.get("semana")) or 0),
+            "nombres": nombres,
+            "apellidos": apellidos,
+            "tipo_documento": str(row.get("tip_ide_", "CC")).strip().upper(),
+            "numero_documento": num_doc,
+            "edad": str(edad),
+            "curso_vida": calcular_curso_vida(edad),
+            "sexo": MAP_SEXO.get(str(row.get("sexo_", "")).strip().upper(), "Indeterminado"),
+            "identidad_genero": MAP_IDEN_GENERO.get(_to_int_safe(row.get("iden_gener")), "Sin información"),
+            "orientacion_sexual": MAP_ORIENT_SEX.get(_to_int_safe(row.get("orient_sex")), "Sin información"),
+            "pertenencia_etnica": MAP_ETNIA.get(_to_int_safe(row.get("per_etn_")), "Ninguno"),
+            "municipio_residencia": str(row.get("nmun_resi", "")).strip().upper(),
+            "gestante": gestante,
+            "semanas_gestacion": str(sem_gest),
+            "discapacidad": discapacidad,
+            "grupos_poblacionales": ", ".join(gp_lista),
+            "modalidad_violencia": modalidad,
+            "fecha_hecho": _fmt_fecha(row.get("fec_hecho")),
+            "hora_hecho": str(row.get("hora_hecho", "")).strip() if not pd.isna(row.get("hora_hecho")) else "",
+            "municipio_hecho": str(row.get("nmun_proce", "")).strip().upper(),
+            "mecanismo_agresion": mecanismo,
+            "escenario": MAP_ESCENARIO.get(_to_int_safe(row.get("escenario")), "Otro"),
+            "ambito": MAP_AMBITO.get(_to_int_safe(row.get("ambito_lug")), "Hogar"),
+            "consumo_spa_victima": _si_no(row.get("consum_spa")),
+            "consumo_alcohol_victima": _si_no(row.get("presencia_de_alcohol_u_otra_sustancia_en_la_víctima")),
+            "jefatura_hogar": "SI" if _to_int_safe(row.get("persona_con_jefatura_de_hogar")) == 1 else "NO",
+            "actividad_victima": MAP_ACTIVIDAD.get(_to_int_safe(row.get("actividad")), "Ninguna"),
+            "antec_violencia": _si_no(row.get("antec")),
+            "conflicto_armado": "SI" if _to_int_safe(row.get("zona_conf")) == 1 else "NO",
+            "sexo_agresor": MAP_SEXO_AGRESOR.get(str(row.get("sexo_agre", "")).strip().upper(), "Sin dato"),
+            "edad_agresor": str(_to_int_safe(row.get("edad_agre")) or 0),
+            "parentesco_agresor": MAP_PARENTESCO.get(_to_int_safe(row.get("r_fam_vic")), "Ninguno"),
+            "convive_agresor": "SI" if _to_int_safe(row.get("conv_agre")) == 1 else "NO",
+            "agresor_no_familiar": MAP_REL_NO_FAMILIAR.get(_to_int_safe(row.get("r_nofiliar")), "No aplica"),
+            "fecha_notificacion_sivigila": _fmt_fecha(row.get("fec_not")),
+            "fecha_consulta": _fmt_fecha(row.get("fec_con_")),
+            "fecha_inicio_sintomas": _fmt_fecha(row.get("ini_sin_")),
+            "upgd_atencion": str(row.get("nom_upgd", "")).strip(),
+            "municipio_atencion": str(row.get("nmun_notif", "")).strip().upper(),
+            "fecha_atencion": _fmt_fecha(row.get("fec_con_")),
+            "hospitalizado": "SI" if _to_int_safe(row.get("pac_hos_")) == 1 else "NO",
+            "fecha_hospitalizacion": _fmt_fecha(row.get("fec_hos_")),
+            "fecha_alta": "",
+            "condicion_final": "VIVO" if _to_int_safe(row.get("con_fin_")) == 1 else ("MUERTO" if _to_int_safe(row.get("con_fin_")) == 2 else "NO SABE"),
+            "fecha_defuncion": _fmt_fecha(row.get("fec_def_")),
+            "atencion_salud_mental": "SI" if _to_int_safe(row.get("ac_mental")) == 1 else "NO",
+            "fecha_salud_mental": "",
+            "valoracion_psicologia": "NO",
+            "fecha_psicologia": "",
+            "valoracion_psiquiatria": "NO",
+            "fecha_psiquiatria": "",
+            "atencion_medicina_general": "NO",
+            "atencion_trabajo_social": "NO",
+            "atencion_salud_ocupacional": "NO",
+            "remision_proteccion": "SI" if _to_int_safe(row.get("remit_prot")) == 1 else "NO",
+            "reporte_autoridades": reporte,
+            "seguimiento_1": "",
+            "seguimiento_2": "",
+            "seguimiento_3": "",
+            "ruta_atencion_integral": "EN PROCESO",
+            "asiste_servicios": "SIN CONTACTO",
+            "num_seguimientos_realizados": "0",
+            "abandono_proceso": "SIN INFORMACIÓN",
+            "reincidencia_nuevo_evento": "SIN INFORMACIÓN",
+            "estado_caso": "ACTIVO",
+            "observaciones": f"Carga histórica - {datetime.now().strftime('%Y-%m-%d')}",
+            "ultima_modificacion_por": st.session_state.get("nombre_completo", "CARGA HISTÓRICA"),
+            "ultima_modificacion_fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        registros.append(registro)
+        time.sleep(0.001)  # IDs únicos
+
+    return pd.DataFrame(registros), n_descartados
+
+
+def modulo_carga_historica(spreadsheet):
+    """Módulo para cargar la base histórica del Evento 875."""
+    st.markdown("""
+    <div class="main-header">
+        <h1>📂 Cargar Base Histórica</h1>
+        <p>Importación masiva de registros del Evento 875 (excluye violencia sexual)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.get("rol") != "SECRETARÍA":
+        st.error("⛔ Solo el rol SECRETARÍA puede cargar bases históricas.")
+        return
+
+    st.info("ℹ️ El sistema descarta automáticamente los registros de violencia sexual "
+            "(solo carga modalidades FÍSICA, PSICOLÓGICA y NEGLIGENCIA Y ABANDONO).")
+
+    archivo = st.file_uploader("Seleccione el archivo Excel histórico (.xlsx)",
+                               type=["xlsx", "xls"], key="carga_hist_file")
+    if archivo is None:
+        return
+
+    try:
+        df_raw = pd.read_excel(archivo)
+        st.success(f"✅ Archivo leído: **{len(df_raw)}** registros, **{len(df_raw.columns)}** columnas.")
+    except Exception as e:
+        st.error(f"❌ Error al leer el archivo: {e}")
+        return
+
+    if "naturaleza" not in df_raw.columns:
+        st.error("❌ El archivo no contiene la columna 'naturaleza'. Verifique que sea la base SIVIGILA 875.")
+        return
+
+    with st.spinner("Transformando datos al esquema del aplicativo..."):
+        df_transformado, n_sexuales = transformar_base_875(df_raw)
+
+    # Detectar duplicados
+    with st.spinner("Verificando duplicados contra la base existente..."):
+        df_existente = cargar_datos(spreadsheet, forzar=True)
+
+    if not df_existente.empty:
+        df_existente["_llave"] = (
+            df_existente["numero_documento"].astype(str).str.strip() + "_" +
+            df_existente["fecha_hecho"].astype(str).str.strip()
+        )
+        df_transformado["_llave"] = (
+            df_transformado["numero_documento"].astype(str).str.strip() + "_" +
+            df_transformado["fecha_hecho"].astype(str).str.strip()
+        )
+        llaves_existentes = set(df_existente["_llave"].tolist())
+        mascara_nuevos = ~df_transformado["_llave"].isin(llaves_existentes)
+        n_duplicados = (~mascara_nuevos).sum()
+        df_nuevos = df_transformado[mascara_nuevos].drop(columns=["_llave"])
+    else:
+        n_duplicados = 0
+        df_nuevos = df_transformado.drop(columns=["_llave"], errors="ignore")
+
+    # Resumen
+    st.markdown("---")
+    st.markdown("### 📊 Resumen")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total en archivo", len(df_raw))
+    c2.metric("Sexuales descartados", n_sexuales)
+    c3.metric("Duplicados omitidos", int(n_duplicados))
+    c4.metric("Nuevos a cargar", len(df_nuevos))
+
+    if df_nuevos.empty:
+        st.warning("⚠️ No hay registros nuevos para insertar.")
+        return
+
+    with st.expander("👁️ Vista previa de los registros a cargar"):
+        cols_prev = ["nombres", "apellidos", "numero_documento", "edad", "sexo",
+                     "modalidad_violencia", "municipio_hecho", "eps_reporta",
+                     "fecha_hecho", "fecha_notificacion_sivigila"]
+        cols_disp = [c for c in cols_prev if c in df_nuevos.columns]
+        st.dataframe(df_nuevos[cols_disp].head(50), use_container_width=True, hide_index=True)
+        if len(df_nuevos) > 50:
+            st.caption(f"Mostrando 50 de {len(df_nuevos)} registros.")
+
+    st.markdown("---")
+    st.warning("⚠️ Esta acción insertará los registros en Google Sheets. No se puede deshacer desde la app.")
+    confirmar = st.button(f"✅ Confirmar e insertar {len(df_nuevos)} registros",
+                          type="primary", use_container_width=True)
+
+    if confirmar:
+        hoja = obtener_hoja_datos(spreadsheet)
+        progreso = st.progress(0)
+        estado = st.empty()
+
+        todas_filas = [[str(r.get(col, "")) for col in COLUMNAS_DATOS]
+                       for _, r in df_nuevos.iterrows()]
+
+        TAMANO_LOTE = 50
+        insertados = 0
+        errores = 0
+        total_lotes = (len(todas_filas) - 1) // TAMANO_LOTE + 1
+
+        for i in range(0, len(todas_filas), TAMANO_LOTE):
+            lote = todas_filas[i:i + TAMANO_LOTE]
+            num_lote = i // TAMANO_LOTE + 1
+            estado.text(f"Insertando lote {num_lote} de {total_lotes} "
+                        f"({len(lote)} registros)...")
+            try:
+                hoja.append_rows(lote, value_input_option="USER_ENTERED", table_range="A1")
+                insertados += len(lote)
+            except Exception as e:
+                st.warning(f"Error en lote {num_lote}: {e}. Reintentando en 30 s...")
+                time.sleep(30)
+                try:
+                    hoja.append_rows(lote, value_input_option="USER_ENTERED", table_range="A1")
+                    insertados += len(lote)
+                except Exception as e2:
+                    errores += len(lote)
+                    st.error(f"Lote {num_lote} falló definitivamente: {e2}")
+
+            progreso.progress(min((i + len(lote)) / len(todas_filas), 1.0))
+            time.sleep(2)  # respeta cuota gspread
+
+        progreso.empty()
+        estado.empty()
+
+        if "_datos_cache_time" in st.session_state:
+            st.session_state["_datos_cache_time"] = 0
+
+        if errores == 0:
+            st.success(f"🎉 Carga completada: **{insertados}** registros insertados.")
+            st.balloons()
+        else:
+            st.warning(f"⚠️ Insertados {insertados}, fallaron {errores}.")
 
 
 # ============================================================
@@ -1900,6 +2333,8 @@ def main():
         modulo_edicion(spreadsheet)
     elif pagina == "📥 Exportar Datos":
         modulo_exportacion(spreadsheet)
+    elif pagina == "📂 Cargar Base Histórica":
+        modulo_carga_historica(spreadsheet)
     elif pagina == "⚙️ Gestionar Usuarios":
         modulo_gestion_usuarios(spreadsheet)
 
