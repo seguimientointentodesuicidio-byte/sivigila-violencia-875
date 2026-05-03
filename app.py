@@ -10,7 +10,6 @@ Stack: Streamlit + Google Sheets (gspread) + Plotly
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
@@ -29,7 +28,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Colores institucionales ---
 COLOR_AZUL_OSCURO = "#1B3A5C"
 COLOR_AZUL_MEDIO = "#2E6B9E"
 COLOR_BLANCO = "#FFFFFF"
@@ -37,7 +35,6 @@ COLOR_GRIS_CLARO = "#F0F2F6"
 COLOR_ROJO_ALERTA = "#D32F2F"
 COLOR_AMARILLO_ALERTA = "#F9A825"
 
-# --- CSS personalizado ---
 st.markdown(f"""
 <style>
     .main-header {{
@@ -149,121 +146,25 @@ CURSOS_VIDA = [
 
 TIPOS_DOCUMENTO = ["RC", "TI", "CC", "CE", "PA", "MS", "AS", "PE", "CN", "CD", "SC", "DE", "PT"]
 
-MODALIDADES_VIOLENCIA = ["FÍSICA", "PSICOLÓGICA", "NEGLIGENCIA Y ABANDONO"]
-
-MECANISMOS_AGRESION = [
-    "NO APLICA",
-    "Ahorcamiento/estrangulamiento",
-    "Caídas",
-    "Contundente",
-    "Cortopunzante",
-    "Proyectil arma de fuego",
-    "Quemadura por fuego",
-    "Quemadura por ácido",
-    "Quemadura por líquido hirviente",
-    "Sustancias domésticas",
-    "Otros"
-]
-
-ESCENARIOS = [
-    "Vivienda",
-    "Vía pública",
-    "Establecimiento educativo",
-    "Lugar de trabajo",
-    "Comercio",
-    "Espacios abiertos",
-    "Lugares con expendio de alcohol",
-    "Institución de salud",
-    "Área deportiva",
-    "Otro"
-]
-
-AMBITOS = [
-    "Hogar",
-    "Escolar",
-    "Laboral",
-    "Institucional",
-    "Virtual",
-    "Comunitario",
-    "Otros"
-]
-
-IDENTIDADES_GENERO = ["Hombre", "Mujer", "Hombre trans", "Mujer trans", "Otra", "Sin información"]
-
-ORIENTACIONES_SEXUALES = ["Heterosexual", "Gay/Lesbiana", "Bisexual", "Otra", "Sin información"]
-
-PERTENENCIAS_ETNICAS = [
-    "Indígena", "Rom/Gitano", "Raizal", "Palenquero",
-    "Negro/Mulato/Afrocolombiano", "Otro", "Ninguno"
-]
-
-PARENTESCOS_AGRESOR = [
-    "Padre", "Madre", "Pareja", "Ex-Pareja",
-    "Hijo/a", "Hermano/a", "Otro familiar", "Ninguno"
-]
-
-RELACIONES_NO_FAMILIAR = [
-    "Profesor", "Amigo", "Compañero de trabajo", "Compañero de estudio",
-    "Conocido sin trato", "Jefe", "Sacerdote/Pastor",
-    "Servidor público", "Desconocido", "Vecino",
-    "Sin información", "Otro"
-]
-
-ACTIVIDADES_VICTIMA = [
-    "Estudiante", "Trabajador doméstico", "Persona dedicada al hogar",
-    "Líder cívico", "Persona en situación de prostitución",
-    "Campesino/a", "Cuidador", "Empleado", "Independiente",
-    "Ninguna", "Otro"
-]
-
-GRUPOS_POBLACIONALES = [
-    "Desplazado", "Migrante", "PPL (Privado de la libertad)",
-    "Habitante de calle", "ICBF", "Madre comunitaria",
-    "Desmovilizado", "Víctima del conflicto armado", "Otro"
-]
-
 ESTADOS_CASO = [
     "ACTIVO", "CERRADO", "EN SEGUIMIENTO",
     "REMITIDO A OTRA EPS", "FALLECIDO", "SIN CONTACTO"
 ]
 
-# Columnas de la hoja DATOS en Google Sheets (70 columnas)
+# Esquema reducido (39 columnas) - alineado con el formulario
 COLUMNAS_DATOS = [
-    "id", "fecha_digitacion", "funcionario_reporta", "eps_reporta",
-    "semana_epidemiologica",
-    # Paciente
+    "id", "fecha_digitacion", "funcionario_reporta",
+    "eps_reporta", "semana_epidemiologica", "antec_violencia",
     "nombres", "apellidos", "tipo_documento", "numero_documento",
-    "edad", "curso_vida", "sexo", "identidad_genero", "orientacion_sexual",
-    "pertenencia_etnica", "municipio_residencia",
-    "gestante", "semanas_gestacion", "discapacidad", "grupos_poblacionales",
-    # Hecho
-    "modalidad_violencia", "fecha_hecho", "hora_hecho",
-    "municipio_hecho", "mecanismo_agresion", "escenario", "ambito",
-    "consumo_spa_victima", "consumo_alcohol_victima",
-    "jefatura_hogar", "actividad_victima",
-    "antec_violencia", "conflicto_armado",
-    # Agresor
-    "sexo_agresor", "edad_agresor", "parentesco_agresor",
-    "convive_agresor", "agresor_no_familiar",
-    # Notificación / Atención
-    "fecha_notificacion_sivigila", "fecha_consulta", "fecha_inicio_sintomas",
-    "upgd_atencion", "municipio_atencion", "fecha_atencion",
-    "hospitalizado", "fecha_hospitalizacion", "fecha_alta",
-    "condicion_final", "fecha_defuncion",
-    # Salud Mental y otras atenciones
+    "edad", "sexo", "curso_vida", "municipio_residencia",
+    "fecha_evento", "upgd_atencion", "municipio_atencion", "fecha_atencion",
     "atencion_salud_mental", "fecha_salud_mental",
     "valoracion_psicologia", "fecha_psicologia",
     "valoracion_psiquiatria", "fecha_psiquiatria",
-    "atencion_medicina_general", "atencion_trabajo_social",
-    "atencion_salud_ocupacional",
-    "remision_proteccion", "reporte_autoridades",
-    # Seguimiento
+    "atencion_trabajo_social", "remision_proteccion", "reporte_autoridades",
     "seguimiento_1", "seguimiento_2", "seguimiento_3",
-    "ruta_atencion_integral", "asiste_servicios",
-    "num_seguimientos_realizados",
-    "abandono_proceso", "reincidencia_nuevo_evento",
-    "estado_caso", "observaciones",
-    # Trazabilidad
+    "ruta_atencion_integral", "asiste_servicios", "num_seguimientos_realizados",
+    "abandono_proceso", "reincidencia_nuevo_evento", "estado_caso", "observaciones",
     "ultima_modificacion_por", "ultima_modificacion_fecha"
 ]
 
@@ -306,12 +207,11 @@ def obtener_conexion_gsheets():
         return spreadsheet
     except Exception as e:
         st.error(f"❌ Error al conectar con Google Sheets: {str(e)}")
-        st.info("Verifique que las credenciales en st.secrets estén correctamente configuradas.")
         return None
 
 
 def obtener_hoja_datos(spreadsheet):
-    """Retorna la hoja 'DATOS' del spreadsheet (la crea si no existe)."""
+    """Retorna la hoja 'DATOS' (la crea si no existe)."""
     try:
         return spreadsheet.worksheet("DATOS")
     except gspread.exceptions.WorksheetNotFound:
@@ -321,7 +221,7 @@ def obtener_hoja_datos(spreadsheet):
 
 
 def obtener_hoja_usuarios(spreadsheet):
-    """Retorna la hoja 'USUARIOS' del spreadsheet (la crea si no existe)."""
+    """Retorna la hoja 'USUARIOS' (la crea si no existe)."""
     try:
         return spreadsheet.worksheet("USUARIOS")
     except gspread.exceptions.WorksheetNotFound:
@@ -363,7 +263,7 @@ def cargar_datos(spreadsheet, forzar=False):
 
 
 def col_num_a_letra(n):
-    """Convierte número de columna (1-indexado) a letra(s) de Excel. Ej: 1→A, 27→AA."""
+    """Convierte número de columna (1-indexado) a letra(s) de Excel."""
     resultado = ""
     while n > 0:
         n, residuo = divmod(n - 1, 26)
@@ -372,7 +272,7 @@ def col_num_a_letra(n):
 
 
 def generar_id():
-    """Genera un ID único basado en timestamp para casos de violencia."""
+    """Genera un ID único basado en timestamp."""
     return f"VG-{datetime.now().strftime('%Y%m%d%H%M%S')}-{int(time.time()*1000) % 10000}"
 
 
@@ -438,12 +338,10 @@ def buscar_por_documento(df, numero_doc):
 # ============================================================
 
 def hash_password(password):
-    """Genera hash SHA-256 de la contraseña."""
     return hashlib.sha256(password.encode()).hexdigest()
 
 
 def verificar_credenciales(spreadsheet, usuario, password):
-    """Verifica las credenciales contra la hoja USUARIOS."""
     try:
         hoja = obtener_hoja_usuarios(spreadsheet)
         registros = hoja.get_all_records()
@@ -465,7 +363,6 @@ def verificar_credenciales(spreadsheet, usuario, password):
 
 
 def crear_usuario(spreadsheet, usuario, password, nombre_completo, rol, eps_asignada):
-    """Crea un nuevo usuario en la hoja USUARIOS."""
     try:
         hoja = obtener_hoja_usuarios(spreadsheet)
         registros = hoja.get_all_records()
@@ -480,7 +377,6 @@ def crear_usuario(spreadsheet, usuario, password, nombre_completo, rol, eps_asig
 
 
 def filtrar_por_rol(df):
-    """Filtra el DataFrame según el rol del usuario logueado."""
     if st.session_state.get("rol") == "SECRETARÍA":
         return df
     eps_usuario = st.session_state.get("eps_asignada", "")
@@ -490,16 +386,15 @@ def filtrar_por_rol(df):
 
 
 # ============================================================
-# PANTALLA DE LOGIN
+# LOGIN
 # ============================================================
 
 def mostrar_login():
-    """Pantalla de inicio de sesión."""
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         try:
-            st.image("Imagen1.png", width=250, use_container_width=False)
+            st.image("Imagen1.png", width=250)
         except Exception:
             st.markdown(f"""
             <div style="text-align:center; padding:1rem;">
@@ -547,11 +442,10 @@ def mostrar_login():
 
 
 # ============================================================
-# SIDEBAR (después de login)
+# SIDEBAR
 # ============================================================
 
 def mostrar_sidebar():
-    """Sidebar con logo, info de usuario y navegación."""
     with st.sidebar:
         try:
             st.image("Imagen1.png", width=200)
@@ -572,10 +466,15 @@ def mostrar_sidebar():
             "📥 Exportar Datos"
         ]
         if st.session_state.get("rol") == "SECRETARÍA":
-            opciones.append("📂 Cargar Base Histórica")
+            opciones.append("📂 Carga Masiva")
             opciones.append("⚙️ Gestionar Usuarios")
 
-        pagina = st.radio("Navegación", opciones, label_visibility="collapsed")
+        # Si hay redirección desde duplicado, forzar página de edición
+        idx_default = 0
+        if st.session_state.get("_ir_a_edicion"):
+            idx_default = opciones.index("✏️ Editar / Actualizar Caso")
+
+        pagina = st.radio("Navegación", opciones, label_visibility="collapsed", index=idx_default)
 
         st.markdown("---")
         if st.button("🚪 Cerrar Sesión", use_container_width=True):
@@ -585,7 +484,7 @@ def mostrar_sidebar():
 
         st.markdown("""
         <div style="position:fixed; bottom:10px; font-size:0.7rem; opacity:0.6;">
-            SIVIGILA Evento 875<br>Valle del Cauca v1.0
+            SIVIGILA Evento 875<br>Valle del Cauca v2.0
         </div>
         """, unsafe_allow_html=True)
 
@@ -593,21 +492,19 @@ def mostrar_sidebar():
 
 
 # ============================================================
-# MÓDULO 1: FORMULARIO DE DIGITACIÓN
+# MÓDULO 1: REGISTRAR NUEVO CASO
 # ============================================================
 
 def modulo_formulario(spreadsheet):
-    """Formulario de registro de nuevos casos."""
+    """Formulario de registro de nuevos casos (esquema reducido)."""
     st.markdown("""
     <div class="main-header">
         <h1>📝 Registro de Nuevo Caso - Violencia de Género e Intrafamiliar</h1>
-        <p>Evento 875 SIVIGILA | SIN componente sexual</p>
+        <p>Evento 875 SIVIGILA | Seguimiento de casos</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st.info("ℹ️ Este aplicativo NO registra violencia sexual. Solo modalidades: FÍSICA, PSICOLÓGICA y NEGLIGENCIA Y ABANDONO.")
-
-    with st.form("formulario_nuevo_caso", clear_on_submit=True):
+    with st.form("formulario_nuevo_caso", clear_on_submit=False):
         # ---- Identificación del Caso ----
         st.markdown("#### 🏷️ Identificación del Caso")
         col1, col2 = st.columns(2)
@@ -621,8 +518,6 @@ def modulo_formulario(spreadsheet):
         with col2:
             antec_violencia = st.selectbox("¿Antecedente de violencia previa?",
                                            options=["", "NO", "SI", "SIN INFORMACIÓN"])
-            conflicto_armado = st.selectbox("¿Hecho en marco del conflicto armado?",
-                                            options=["", "NO", "SI"])
 
         eps_otra = ""
         if st.session_state.get("rol") != "EPS" and eps_seleccionada == "OTRA (especificar)":
@@ -630,124 +525,60 @@ def modulo_formulario(spreadsheet):
 
         st.markdown("---")
 
-        # ---- Datos del Paciente / Víctima ----
-        st.markdown("#### 👤 Datos del Paciente / Víctima")
+        # ---- Datos de la Víctima ----
+        st.markdown("#### 👤 Datos de la Víctima")
         col1, col2 = st.columns(2)
         with col1:
             nombres = st.text_input("Nombres *", placeholder="NOMBRES DE LA VÍCTIMA")
             tipo_doc = st.selectbox("Tipo de documento *", options=[""] + TIPOS_DOCUMENTO)
             edad = st.number_input("Edad *", min_value=0, max_value=120, value=0, step=1)
-            identidad_genero = st.selectbox("Identidad de género", options=[""] + IDENTIDADES_GENERO)
-            pertenencia_etnica = st.selectbox("Pertenencia étnica", options=[""] + PERTENENCIAS_ETNICAS)
         with col2:
             apellidos = st.text_input("Apellidos *", placeholder="APELLIDOS DE LA VÍCTIMA")
             numero_doc = st.text_input("Número de documento *", placeholder="Solo números")
             sexo = st.selectbox("Sexo *", options=["", "Masculino", "Femenino", "Indeterminado"])
-            orientacion_sexual = st.selectbox("Orientación sexual", options=[""] + ORIENTACIONES_SEXUALES)
-            municipio_residencia = st.selectbox("Municipio de residencia *", options=[""] + MUNICIPIOS_VALLE)
 
         col1, col2 = st.columns(2)
         with col1:
+            municipio_residencia = st.selectbox("Municipio de residencia *", options=[""] + MUNICIPIOS_VALLE)
+        with col2:
             curso_vida = calcular_curso_vida(edad)
             st.text_input("Curso de vida (automático)", value=curso_vida, disabled=True)
-            discapacidad = st.selectbox("Discapacidad", options=["", "NO", "SI"])
-        with col2:
-            gestante = st.selectbox("Gestante", options=["", "NO APLICA", "NO", "SI"])
-            semanas_gestacion = st.number_input("Semanas de gestación (solo si gestante = SI)",
-                                                min_value=0, max_value=42, value=0)
 
-        grupos_pob = st.multiselect("Grupos poblacionales", options=GRUPOS_POBLACIONALES)
-
-        # Alerta de menor de 14 años
         if edad > 0 and edad < 14:
             st.error("🚨 **CASO PRIORITARIO** - Menor de 14 años. Reporte obligatorio a ICBF y Fiscalía.")
 
         st.markdown("---")
 
-        # ---- Datos del Hecho ----
-        st.markdown("#### 🎯 Datos del Hecho")
-        col1, col2 = st.columns(2)
-        with col1:
-            modalidad = st.selectbox("Modalidad de la violencia *", options=[""] + MODALIDADES_VIOLENCIA)
-            fecha_hecho = st.date_input("Fecha del hecho *", value=None)
-            municipio_hecho = st.selectbox("Municipio del hecho *", options=[""] + MUNICIPIOS_VALLE)
-            escenario = st.selectbox("Escenario", options=[""] + ESCENARIOS)
-        with col2:
-            hora_hecho = st.time_input("Hora del hecho", value=None)
-            mecanismo = st.selectbox("Mecanismo de la agresión", options=[""] + MECANISMOS_AGRESION,
-                                     help="Si la modalidad es NEGLIGENCIA Y ABANDONO, seleccione NO APLICA.")
-            ambito = st.selectbox("Ámbito", options=[""] + AMBITOS)
-            actividad_victima = st.selectbox("Actividad de la víctima", options=[""] + ACTIVIDADES_VICTIMA)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            consumo_spa = st.selectbox("Consumo de SPA por la víctima",
-                                       options=["", "NO", "SI", "SIN INFORMACIÓN"])
-            jefatura_hogar = st.selectbox("¿Persona con jefatura de hogar?", options=["", "NO", "SI"])
-        with col2:
-            consumo_alcohol = st.selectbox("Consumo de alcohol por la víctima",
-                                           options=["", "NO", "SI", "SIN INFORMACIÓN"])
-
-        st.markdown("---")
-
-        # ---- Datos del Agresor ----
-        st.markdown("#### 👥 Datos del Agresor")
-        col1, col2 = st.columns(2)
-        with col1:
-            sexo_agresor = st.selectbox("Sexo del agresor",
-                                        options=["", "Masculino", "Femenino", "Intersexual", "Sin dato"])
-            parentesco_agresor = st.selectbox("Parentesco con la víctima", options=[""] + PARENTESCOS_AGRESOR)
-            convive_agresor = st.selectbox("¿Convive con el agresor?", options=["", "NO", "SI"])
-        with col2:
-            edad_agresor = st.number_input("Edad del agresor (0 = sin dato)",
-                                           min_value=0, max_value=120, value=0)
-            agresor_no_familiar = st.selectbox("Agresor no familiar (relación)",
-                                               options=["", "No aplica"] + RELACIONES_NO_FAMILIAR)
-
-        st.markdown("---")
-
-        # ---- Notificación y Atención ----
+        # ---- Notificación y Atención Inicial ----
         st.markdown("#### 📋 Notificación y Atención Inicial")
         col1, col2 = st.columns(2)
         with col1:
-            fecha_notificacion = st.date_input("Fecha de notificación SIVIGILA *", value=None)
-            fecha_consulta = st.date_input("Fecha de consulta", value=None)
-            fecha_inicio_sintomas = st.date_input("Fecha de inicio de síntomas", value=None)
-            upgd_atencion = st.text_input("UPGD / IPS que atendió")
+            fecha_evento = st.date_input("Fecha del evento *", value=None)
+            upgd_atencion = st.text_input("Entidad de la atención (UPGD / IPS)")
         with col2:
             municipio_atencion = st.selectbox("Municipio de la atención", options=[""] + MUNICIPIOS_VALLE)
             fecha_atencion = st.date_input("Fecha de la atención", value=None)
-            hospitalizado = st.selectbox("Hospitalizado", options=["", "NO", "SI", "NO APLICA"])
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            fecha_hospitalizacion = st.date_input("Fecha de hospitalización", value=None)
-        with col2:
-            fecha_alta = st.date_input("Fecha de alta", value=None)
-        with col3:
-            condicion_final = st.selectbox("Condición final", options=["", "VIVO", "MUERTO", "NO SABE"])
-
-        fecha_defuncion = st.date_input("Fecha de defunción (solo si condición = MUERTO)", value=None)
 
         st.markdown("---")
 
         # ---- Atención Integral en Salud ----
         st.markdown("#### 🧠 Atención Integral en Salud")
-        st.caption("Solo componentes aplicables a violencia NO sexual.")
-        col1, col2 = st.columns(2)
         sino_na = ["", "NO", "SI", "NO APLICA"]
+        col1, col2 = st.columns(2)
         with col1:
             atencion_sm = st.selectbox("Atención por Salud Mental", options=sino_na)
             fecha_sm = st.date_input("Fecha atención Salud Mental", value=None)
             val_psicologia = st.selectbox("Valoración por Psicología", options=sino_na)
             fecha_psicologia = st.date_input("Fecha primera atención Psicología", value=None)
-            atencion_med_gral = st.selectbox("Atención Medicina General", options=sino_na)
-            atencion_ts = st.selectbox("Atención Trabajo Social", options=sino_na)
         with col2:
             val_psiquiatria = st.selectbox("Valoración por Psiquiatría", options=sino_na)
             fecha_psiquiatria = st.date_input("Fecha primera atención Psiquiatría", value=None)
-            atencion_so = st.selectbox("Atención Salud Ocupacional", options=sino_na)
+            atencion_ts = st.selectbox("Atención Trabajo Social", options=sino_na)
+
+        col1, col2 = st.columns(2)
+        with col1:
             remision_proteccion = st.selectbox("Remisión a protección (ICBF, Comisaría)", options=sino_na)
+        with col2:
             reporte_autoridades = st.selectbox("Reporte a autoridades (Fiscalía, Policía, URI, CTI)",
                                                options=sino_na)
 
@@ -782,10 +613,8 @@ def modulo_formulario(spreadsheet):
                                      placeholder="Bitácora de gestión: llamadas, notas, derivaciones...",
                                      height=120)
 
-        funcionario = st.text_input("Funcionario que reporta",
-                                    value=st.session_state.get("nombre_completo", ""),
-                                    disabled=True)
-
+        st.text_input("Funcionario que reporta",
+                      value=st.session_state.get("nombre_completo", ""), disabled=True)
         st.markdown(f"📅 **Fecha de digitación:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
         submitted = st.form_submit_button("💾 Guardar Registro",
@@ -803,103 +632,62 @@ def modulo_formulario(spreadsheet):
                 errores.append("Nombres es obligatorio.")
             if not apellidos.strip():
                 errores.append("Apellidos es obligatorio.")
-            if not numero_doc.strip():
-                errores.append("Número de documento es obligatorio.")
             if not tipo_doc:
                 errores.append("Tipo de documento es obligatorio.")
+            if not numero_doc.strip():
+                errores.append("Número de documento es obligatorio.")
             if not sexo:
                 errores.append("Sexo es obligatorio.")
-            if not modalidad:
-                errores.append("Modalidad de la violencia es obligatoria.")
-            if not estado_caso:
-                errores.append("Estado del caso es obligatorio.")
             if not municipio_residencia:
                 errores.append("Municipio de residencia es obligatorio.")
-            if not municipio_hecho:
-                errores.append("Municipio del hecho es obligatorio.")
-            if not fecha_hecho:
-                errores.append("Fecha del hecho es obligatoria.")
-            if not fecha_notificacion:
-                errores.append("Fecha de notificación SIVIGILA es obligatoria.")
+            if not fecha_evento:
+                errores.append("Fecha del evento es obligatoria.")
+            if not estado_caso:
+                errores.append("Estado del caso es obligatorio.")
             if edad == 0:
                 errores.append("Verifique que la edad sea correcta (actualmente es 0).")
-            if gestante == "SI" and sexo and sexo != "Femenino":
-                errores.append("Si está gestante, el sexo debe ser Femenino.")
-            if modalidad == "NEGLIGENCIA Y ABANDONO" and mecanismo not in ("NO APLICA", ""):
-                errores.append("Si la modalidad es NEGLIGENCIA Y ABANDONO, el mecanismo debe ser NO APLICA.")
 
             if errores:
                 for err in errores:
                     st.error(f"⚠️ {err}")
             else:
                 df_check = cargar_datos(spreadsheet, forzar=True)
-                df_check = filtrar_por_rol(df_check)
-                duplicados = buscar_por_documento(df_check, numero_doc)
+                df_check_rol = filtrar_por_rol(df_check)
+                duplicados = buscar_por_documento(df_check_rol, numero_doc)
+
                 if not duplicados.empty:
+                    st.session_state["_duplicado_doc"] = numero_doc.strip()
+                    st.session_state["_duplicado_ids"] = duplicados["id"].tolist()
                     st.warning(f"⚠️ Ya existe(n) **{len(duplicados)}** registro(s) con el documento "
-                               f"**{numero_doc}**. Si desea actualizar, use el módulo "
-                               "'Editar / Actualizar Caso'.")
+                               f"**{numero_doc}**. Use el botón abajo para ir directo al módulo de edición.")
                     cols_mostrar = ["nombres", "apellidos", "numero_documento", "eps_reporta",
-                                    "estado_caso", "fecha_notificacion_sivigila"]
+                                    "estado_caso", "fecha_evento"]
                     cols_disp = [c for c in cols_mostrar if c in duplicados.columns]
                     st.dataframe(duplicados[cols_disp], use_container_width=True, hide_index=True)
                 else:
                     datos = {
                         "eps_reporta": eps_final,
                         "semana_epidemiologica": str(semana_epi),
+                        "antec_violencia": antec_violencia,
                         "nombres": nombres.upper().strip(),
                         "apellidos": apellidos.upper().strip(),
                         "tipo_documento": tipo_doc,
                         "numero_documento": numero_doc.strip(),
                         "edad": str(edad),
-                        "curso_vida": calcular_curso_vida(edad),
                         "sexo": sexo,
-                        "identidad_genero": identidad_genero,
-                        "orientacion_sexual": orientacion_sexual,
-                        "pertenencia_etnica": pertenencia_etnica,
+                        "curso_vida": calcular_curso_vida(edad),
                         "municipio_residencia": municipio_residencia,
-                        "gestante": gestante,
-                        "semanas_gestacion": str(semanas_gestacion),
-                        "discapacidad": discapacidad,
-                        "grupos_poblacionales": ", ".join(grupos_pob),
-                        "modalidad_violencia": modalidad,
-                        "fecha_hecho": str(fecha_hecho) if fecha_hecho else "",
-                        "hora_hecho": str(hora_hecho) if hora_hecho else "",
-                        "municipio_hecho": municipio_hecho,
-                        "mecanismo_agresion": mecanismo,
-                        "escenario": escenario,
-                        "ambito": ambito,
-                        "consumo_spa_victima": consumo_spa,
-                        "consumo_alcohol_victima": consumo_alcohol,
-                        "jefatura_hogar": jefatura_hogar,
-                        "actividad_victima": actividad_victima,
-                        "antec_violencia": antec_violencia,
-                        "conflicto_armado": conflicto_armado,
-                        "sexo_agresor": sexo_agresor,
-                        "edad_agresor": str(edad_agresor),
-                        "parentesco_agresor": parentesco_agresor,
-                        "convive_agresor": convive_agresor,
-                        "agresor_no_familiar": agresor_no_familiar,
-                        "fecha_notificacion_sivigila": str(fecha_notificacion) if fecha_notificacion else "",
-                        "fecha_consulta": str(fecha_consulta) if fecha_consulta else "",
-                        "fecha_inicio_sintomas": str(fecha_inicio_sintomas) if fecha_inicio_sintomas else "",
+                        "fecha_evento": str(fecha_evento) if fecha_evento else "",
                         "upgd_atencion": upgd_atencion,
                         "municipio_atencion": municipio_atencion,
                         "fecha_atencion": str(fecha_atencion) if fecha_atencion else "",
-                        "hospitalizado": hospitalizado,
-                        "fecha_hospitalizacion": str(fecha_hospitalizacion) if fecha_hospitalizacion else "",
-                        "fecha_alta": str(fecha_alta) if fecha_alta else "",
-                        "condicion_final": condicion_final,
-                        "fecha_defuncion": str(fecha_defuncion) if fecha_defuncion else "",
                         "atencion_salud_mental": atencion_sm,
                         "fecha_salud_mental": str(fecha_sm) if fecha_sm else "",
                         "valoracion_psicologia": val_psicologia,
                         "fecha_psicologia": str(fecha_psicologia) if fecha_psicologia else "",
                         "valoracion_psiquiatria": val_psiquiatria,
                         "fecha_psiquiatria": str(fecha_psiquiatria) if fecha_psiquiatria else "",
-                        "atencion_medicina_general": atencion_med_gral,
                         "atencion_trabajo_social": atencion_ts,
-                        "atencion_salud_ocupacional": atencion_so,
                         "remision_proteccion": remision_proteccion,
                         "reporte_autoridades": reporte_autoridades,
                         "seguimiento_1": seguimiento_1,
@@ -927,13 +715,21 @@ def modulo_formulario(spreadsheet):
                     else:
                         st.error(f"❌ Error al guardar: {resultado}")
 
+    # Botón fuera del formulario para ir a edición si hubo duplicado
+    if st.session_state.get("_duplicado_doc"):
+        if st.button("✏️ Ir a editar este caso", type="primary", use_container_width=True):
+            st.session_state["_ir_a_edicion"] = True
+            st.session_state["_edit_doc_busqueda"] = st.session_state["_duplicado_doc"]
+            st.session_state.pop("_duplicado_doc", None)
+            st.session_state.pop("_duplicado_ids", None)
+            st.rerun()
+
 
 # ============================================================
-# MÓDULO 2: TABLERO DE CONTROL (DASHBOARD)
+# MÓDULO 2: TABLERO DE CONTROL
 # ============================================================
 
 def modulo_dashboard(spreadsheet):
-    """Tablero de control con KPIs, gráficas y alertas."""
     st.markdown("""
     <div class="main-header">
         <h1>📊 Tablero de Control - Violencia de Género e Intrafamiliar</h1>
@@ -945,10 +741,9 @@ def modulo_dashboard(spreadsheet):
     df = filtrar_por_rol(df)
 
     if df.empty:
-        st.info("📭 No hay datos registrados aún. Comience registrando casos en el módulo de Digitación.")
+        st.info("📭 No hay datos registrados aún.")
         return
 
-    # Conversión de tipos
     df["edad"] = pd.to_numeric(df["edad"], errors="coerce").fillna(0).astype(int)
     df["num_seguimientos_realizados"] = pd.to_numeric(
         df["num_seguimientos_realizados"], errors="coerce").fillna(0).astype(int)
@@ -961,29 +756,26 @@ def modulo_dashboard(spreadsheet):
         with col1:
             filtro_eps = st.multiselect("EPS", options=sorted(df["eps_reporta"].unique().tolist()))
         with col2:
-            filtro_municipio = st.multiselect("Municipio del hecho",
-                                              options=sorted(df["municipio_hecho"].unique().tolist()))
+            filtro_municipio = st.multiselect("Municipio de residencia",
+                                              options=sorted(df["municipio_residencia"].unique().tolist()))
         with col3:
-            filtro_modalidad = st.multiselect("Modalidad",
-                                              options=sorted(df["modalidad_violencia"].unique().tolist()))
+            filtro_curso = st.multiselect("Curso de vida",
+                                          options=sorted(df["curso_vida"].unique().tolist()))
         with col4:
             filtro_estado = st.multiselect("Estado del caso",
                                            options=sorted(df["estado_caso"].unique().tolist()))
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            filtro_curso = st.multiselect("Curso de vida",
-                                          options=sorted(df["curso_vida"].unique().tolist()))
-        with col2:
             filtro_sexo = st.multiselect("Sexo de la víctima",
                                          options=sorted(df["sexo"].unique().tolist()))
-        with col3:
+        with col2:
             try:
-                fechas_validas = pd.to_datetime(df["fecha_hecho"], errors="coerce").dropna()
+                fechas_validas = pd.to_datetime(df["fecha_evento"], errors="coerce").dropna()
                 if not fechas_validas.empty:
                     fecha_min = fechas_validas.min().date()
                     fecha_max = fechas_validas.max().date()
-                    filtro_fecha = st.date_input("Rango de fechas del hecho",
+                    filtro_fecha = st.date_input("Rango de fechas del evento",
                                                  value=(fecha_min, fecha_max),
                                                  min_value=fecha_min, max_value=fecha_max)
                 else:
@@ -991,379 +783,286 @@ def modulo_dashboard(spreadsheet):
             except Exception:
                 filtro_fecha = None
 
-    # Aplicar filtros
-    df_filtrado = df.copy()
+    df_f = df.copy()
     if filtro_eps:
-        df_filtrado = df_filtrado[df_filtrado["eps_reporta"].isin(filtro_eps)]
+        df_f = df_f[df_f["eps_reporta"].isin(filtro_eps)]
     if filtro_municipio:
-        df_filtrado = df_filtrado[df_filtrado["municipio_hecho"].isin(filtro_municipio)]
-    if filtro_modalidad:
-        df_filtrado = df_filtrado[df_filtrado["modalidad_violencia"].isin(filtro_modalidad)]
-    if filtro_estado:
-        df_filtrado = df_filtrado[df_filtrado["estado_caso"].isin(filtro_estado)]
+        df_f = df_f[df_f["municipio_residencia"].isin(filtro_municipio)]
     if filtro_curso:
-        df_filtrado = df_filtrado[df_filtrado["curso_vida"].isin(filtro_curso)]
+        df_f = df_f[df_f["curso_vida"].isin(filtro_curso)]
+    if filtro_estado:
+        df_f = df_f[df_f["estado_caso"].isin(filtro_estado)]
     if filtro_sexo:
-        df_filtrado = df_filtrado[df_filtrado["sexo"].isin(filtro_sexo)]
+        df_f = df_f[df_f["sexo"].isin(filtro_sexo)]
     if filtro_fecha and isinstance(filtro_fecha, tuple) and len(filtro_fecha) == 2:
-        df_filtrado["_fecha_temp"] = pd.to_datetime(df_filtrado["fecha_hecho"], errors="coerce")
-        df_filtrado = df_filtrado[
-            (df_filtrado["_fecha_temp"] >= pd.Timestamp(filtro_fecha[0])) &
-            (df_filtrado["_fecha_temp"] <= pd.Timestamp(filtro_fecha[1]))
-        ]
-        df_filtrado = df_filtrado.drop(columns=["_fecha_temp"], errors="ignore")
+        df_f["_fec"] = pd.to_datetime(df_f["fecha_evento"], errors="coerce")
+        df_f = df_f[(df_f["_fec"] >= pd.Timestamp(filtro_fecha[0])) &
+                    (df_f["_fec"] <= pd.Timestamp(filtro_fecha[1]))]
+        df_f = df_f.drop(columns=["_fec"], errors="ignore")
 
     # --- KPIs ---
-    total_casos = len(df_filtrado)
-    menores_18 = len(df_filtrado[df_filtrado["edad"] < 18])
-    pct_menores = (menores_18 / total_casos * 100) if total_casos > 0 else 0
-    mujeres = len(df_filtrado[df_filtrado["sexo"] == "Femenino"])
-    pct_mujeres = (mujeres / total_casos * 100) if total_casos > 0 else 0
-    reincidentes = len(df_filtrado[df_filtrado["antec_violencia"].str.upper() == "SI"])
-    pct_reincidentes = (reincidentes / total_casos * 100) if total_casos > 0 else 0
-    activos_sin_seg = len(df_filtrado[
-        (df_filtrado["estado_caso"].str.upper() == "ACTIVO") &
-        (df_filtrado["num_seguimientos_realizados"] == 0)
-    ])
-    gestantes = len(df_filtrado[df_filtrado["gestante"].str.upper() == "SI"])
+    total = len(df_f)
+    menores_18 = len(df_f[df_f["edad"] < 18])
+    menores_14 = len(df_f[df_f["edad"] < 14])
+    pct_m18 = (menores_18 / total * 100) if total else 0
+    mujeres = len(df_f[df_f["sexo"] == "Femenino"])
+    pct_muj = (mujeres / total * 100) if total else 0
+    reincidentes = len(df_f[df_f["antec_violencia"].str.upper() == "SI"])
+    pct_rein = (reincidentes / total * 100) if total else 0
+    activos_sin_seg = len(df_f[(df_f["estado_caso"].str.upper() == "ACTIVO") &
+                               (df_f["num_seguimientos_realizados"] == 0)])
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-value">{total_casos}</div>
-            <div class="kpi-label">Total Casos Registrados</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="kpi-card"><div class="kpi-value">{total}</div>
+        <div class="kpi-label">Total Casos Registrados</div></div>""", unsafe_allow_html=True)
     with col2:
-        st.markdown(f"""
-        <div class="kpi-card kpi-card-warning">
-            <div class="kpi-value">{menores_18} <small style="font-size:0.5em;">({pct_menores:.1f}%)</small></div>
-            <div class="kpi-label">⚠️ Menores de 18 años</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="kpi-card kpi-card-warning"><div class="kpi-value">{menores_18}
+        <small style="font-size:0.5em;">({pct_m18:.1f}%)</small></div>
+        <div class="kpi-label">⚠️ Menores de 18 años</div></div>""", unsafe_allow_html=True)
     with col3:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-value">{mujeres} <small style="font-size:0.5em;">({pct_mujeres:.1f}%)</small></div>
-            <div class="kpi-label">Casos en mujeres</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="kpi-card"><div class="kpi-value">{mujeres}
+        <small style="font-size:0.5em;">({pct_muj:.1f}%)</small></div>
+        <div class="kpi-label">Casos en mujeres</div></div>""", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown(f"""
-        <div class="kpi-card kpi-card-danger">
-            <div class="kpi-value">{reincidentes} <small style="font-size:0.5em;">({pct_reincidentes:.1f}%)</small></div>
-            <div class="kpi-label">🚨 Reincidentes (violencia previa)</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="kpi-card kpi-card-danger"><div class="kpi-value">{reincidentes}
+        <small style="font-size:0.5em;">({pct_rein:.1f}%)</small></div>
+        <div class="kpi-label">🚨 Reincidentes (violencia previa)</div></div>""", unsafe_allow_html=True)
     with col2:
-        st.markdown(f"""
-        <div class="kpi-card kpi-card-danger">
-            <div class="kpi-value">{activos_sin_seg}</div>
-            <div class="kpi-label">🚨 Activos sin seguimiento</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="kpi-card kpi-card-danger"><div class="kpi-value">{activos_sin_seg}</div>
+        <div class="kpi-label">🚨 Activos sin seguimiento</div></div>""", unsafe_allow_html=True)
     with col3:
-        st.markdown(f"""
-        <div class="kpi-card kpi-card-danger">
-            <div class="kpi-value">{gestantes}</div>
-            <div class="kpi-label">🚨 Casos en gestantes</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="kpi-card kpi-card-danger"><div class="kpi-value">{menores_14}</div>
+        <div class="kpi-label">🚨 Menores de 14 años</div></div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- Gráficas ---
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Distribución", "📈 Tendencias", "👥 Agresor", "🚨 Alertas"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Distribución", "📈 Tendencias", "🧠 Atenciones", "🚨 Alertas"])
 
+    # ---- TAB 1: Distribución ----
     with tab1:
         col1, col2 = st.columns(2)
         with col1:
-            df_mun = df_filtrado["municipio_hecho"].value_counts().reset_index()
+            df_mun = df_f["municipio_residencia"].value_counts().reset_index()
             df_mun.columns = ["Municipio", "Casos"]
             df_mun = df_mun.sort_values("Casos", ascending=True)
-            fig_mun = px.bar(df_mun, x="Casos", y="Municipio", orientation="h",
-                             title="Casos por Municipio del Hecho",
-                             color="Casos", color_continuous_scale="Reds",
-                             text="Casos")
-            fig_mun.update_traces(textposition="outside")
-            fig_mun.update_layout(height=max(400, len(df_mun) * 28),
-                                  showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_mun, use_container_width=True)
+            fig = px.bar(df_mun, x="Casos", y="Municipio", orientation="h",
+                         title="Casos por Municipio de Residencia",
+                         color="Casos", color_continuous_scale="Reds", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(height=max(400, len(df_mun) * 28),
+                              showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            df_eps = df_filtrado["eps_reporta"].value_counts().reset_index()
+            df_eps = df_f["eps_reporta"].value_counts().reset_index()
             df_eps.columns = ["EPS", "Casos"]
-            fig_eps = px.bar(df_eps, x="EPS", y="Casos",
-                             title="Casos por EPS",
-                             color="Casos", color_continuous_scale="Blues",
-                             text="Casos")
-            fig_eps.update_traces(textposition="outside")
-            fig_eps.update_layout(xaxis_tickangle=-45, height=400,
-                                  showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_eps, use_container_width=True)
+            fig = px.bar(df_eps, x="EPS", y="Casos",
+                         title="Casos por EPS",
+                         color="Casos", color_continuous_scale="Blues", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(xaxis_tickangle=-45, height=400,
+                              showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            df_mod = df_filtrado["modalidad_violencia"].value_counts().reset_index()
-            df_mod.columns = ["Modalidad", "Casos"]
-            fig_mod = px.pie(df_mod, values="Casos", names="Modalidad",
-                             title="Distribución por Modalidad de Violencia",
-                             color_discrete_sequence=["#D32F2F", "#F9A825", "#9C27B0"],
-                             hole=0.4)
-            fig_mod.update_traces(textinfo="percent+value")
-            st.plotly_chart(fig_mod, use_container_width=True)
-
-        with col2:
-            df_sexo = df_filtrado["sexo"].value_counts().reset_index()
+            df_sexo = df_f["sexo"].value_counts().reset_index()
             df_sexo.columns = ["Sexo", "Casos"]
-            fig_sexo = px.pie(df_sexo, values="Casos", names="Sexo",
-                              title="Distribución por Sexo de la Víctima",
-                              color_discrete_sequence=["#D32F2F", "#1565C0", "#9E9E9E"],
-                              hole=0.4)
-            fig_sexo.update_traces(textinfo="percent+value")
-            st.plotly_chart(fig_sexo, use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            df_curso = df_filtrado["curso_vida"].value_counts().reset_index()
+            fig = px.pie(df_sexo, values="Casos", names="Sexo",
+                         title="Distribución por Sexo de la Víctima",
+                         color_discrete_sequence=["#D32F2F", "#1565C0", "#9E9E9E"], hole=0.4)
+            fig.update_traces(textinfo="percent+value")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            df_curso = df_f["curso_vida"].value_counts().reset_index()
             df_curso.columns = ["Curso de Vida", "Casos"]
-            fig_curso = px.pie(df_curso, values="Casos", names="Curso de Vida",
-                               title="Distribución por Curso de Vida",
-                               color_discrete_sequence=["#0D2137", "#1B3A5C", "#2E6B9E",
-                                                        "#4A90C4", "#7FB3D8", "#B5D4E9"],
-                               hole=0.4)
-            fig_curso.update_traces(textinfo="percent+value")
-            st.plotly_chart(fig_curso, use_container_width=True)
+            fig = px.pie(df_curso, values="Casos", names="Curso de Vida",
+                         title="Distribución por Curso de Vida",
+                         color_discrete_sequence=["#0D2137", "#1B3A5C", "#2E6B9E",
+                                                  "#4A90C4", "#7FB3D8", "#B5D4E9"], hole=0.4)
+            fig.update_traces(textinfo="percent+value")
+            st.plotly_chart(fig, use_container_width=True)
 
-        with col2:
-            df_mec = df_filtrado["mecanismo_agresion"].value_counts().reset_index()
-            df_mec.columns = ["Mecanismo", "Casos"]
-            df_mec = df_mec.sort_values("Casos", ascending=True)
-            fig_mec = px.bar(df_mec, x="Casos", y="Mecanismo", orientation="h",
-                             title="Mecanismo de Agresión más Frecuente",
-                             color="Casos", color_continuous_scale="Oranges",
-                             text="Casos")
-            fig_mec.update_traces(textposition="outside")
-            fig_mec.update_layout(height=max(400, len(df_mec) * 32),
-                                  showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_mec, use_container_width=True)
+        df_estado = df_f["estado_caso"].value_counts().reset_index()
+        df_estado.columns = ["Estado", "Casos"]
+        fig = px.bar(df_estado, x="Estado", y="Casos",
+                     title="Distribución por Estado del Caso",
+                     color="Estado", text="Casos",
+                     color_discrete_map={
+                         "ACTIVO": "#F9A825", "CERRADO": "#4CAF50",
+                         "EN SEGUIMIENTO": "#2196F3", "FALLECIDO": "#D32F2F",
+                         "SIN CONTACTO": "#9E9E9E", "REMITIDO A OTRA EPS": "#FF9800"
+                     })
+        fig.update_traces(textposition="outside")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            df_esc = df_filtrado["escenario"].value_counts().reset_index()
-            df_esc.columns = ["Escenario", "Casos"]
-            fig_esc = px.bar(df_esc, x="Escenario", y="Casos",
-                             title="Escenario más Frecuente",
-                             color="Casos", color_continuous_scale="Purples",
-                             text="Casos")
-            fig_esc.update_traces(textposition="outside")
-            fig_esc.update_layout(xaxis_tickangle=-45, height=400,
-                                  showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_esc, use_container_width=True)
-
-        with col2:
-            df_amb = df_filtrado["ambito"].value_counts().reset_index()
-            df_amb.columns = ["Ámbito", "Casos"]
-            fig_amb = px.bar(df_amb, x="Ámbito", y="Casos",
-                             title="Distribución por Ámbito",
-                             color="Casos", color_continuous_scale="Teal",
-                             text="Casos")
-            fig_amb.update_traces(textposition="outside")
-            fig_amb.update_layout(xaxis_tickangle=-45, height=400,
-                                  showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_amb, use_container_width=True)
-
+    # ---- TAB 2: Tendencias ----
     with tab2:
-        df_sem = df_filtrado.groupby("semana_epidemiologica").size().reset_index(name="Casos")
+        df_sem = df_f.groupby("semana_epidemiologica").size().reset_index(name="Casos")
         df_sem = df_sem.sort_values("semana_epidemiologica")
-        fig_sem = px.line(df_sem, x="semana_epidemiologica", y="Casos",
+        df_sem = df_sem[df_sem["semana_epidemiologica"] > 0]
+        if not df_sem.empty:
+            fig = px.line(df_sem, x="semana_epidemiologica", y="Casos",
                           title="Tendencia de Casos por Semana Epidemiológica",
                           markers=True, text="Casos")
-        fig_sem.update_traces(textposition="top center",
+            fig.update_traces(textposition="top center",
                               line_color=COLOR_AZUL_OSCURO, marker_color=COLOR_ROJO_ALERTA)
-        fig_sem.update_layout(xaxis_title="Semana Epidemiológica", yaxis_title="Número de Casos")
-        st.plotly_chart(fig_sem, use_container_width=True)
+            fig.update_layout(xaxis_title="Semana Epidemiológica", yaxis_title="Número de Casos")
+            st.plotly_chart(fig, use_container_width=True)
 
-        # Modalidad por curso de vida
-        df_cross = df_filtrado.groupby(["curso_vida", "modalidad_violencia"]).size().reset_index(name="Casos")
-        fig_cross = px.bar(df_cross, x="curso_vida", y="Casos", color="modalidad_violencia",
-                           title="Modalidad de Violencia por Curso de Vida",
-                           barmode="group", text="Casos",
-                           color_discrete_map={"FÍSICA": "#D32F2F",
-                                               "PSICOLÓGICA": "#F9A825",
-                                               "NEGLIGENCIA Y ABANDONO": "#9C27B0"})
-        fig_cross.update_traces(textposition="outside")
-        fig_cross.update_layout(xaxis_tickangle=-30)
-        st.plotly_chart(fig_cross, use_container_width=True)
+        df_cv_estado = df_f.groupby(["curso_vida", "estado_caso"]).size().reset_index(name="Casos")
+        if not df_cv_estado.empty:
+            fig = px.bar(df_cv_estado, x="curso_vida", y="Casos", color="estado_caso",
+                         title="Estado del Caso por Curso de Vida",
+                         barmode="group", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(xaxis_tickangle=-30)
+            st.plotly_chart(fig, use_container_width=True)
 
-        df_estado = df_filtrado["estado_caso"].value_counts().reset_index()
-        df_estado.columns = ["Estado", "Casos"]
-        fig_estado = px.bar(df_estado, x="Estado", y="Casos",
-                            title="Distribución por Estado del Caso",
-                            color="Estado", text="Casos",
-                            color_discrete_map={
-                                "ACTIVO": "#F9A825",
-                                "CERRADO": "#4CAF50",
-                                "EN SEGUIMIENTO": "#2196F3",
-                                "FALLECIDO": "#D32F2F",
-                                "SIN CONTACTO": "#9E9E9E",
-                                "REMITIDO A OTRA EPS": "#FF9800"
-                            })
-        fig_estado.update_traces(textposition="outside")
-        fig_estado.update_layout(showlegend=False)
-        st.plotly_chart(fig_estado, use_container_width=True)
-
+    # ---- TAB 3: Atenciones ----
     with tab3:
         col1, col2 = st.columns(2)
         with col1:
-            df_par = df_filtrado["parentesco_agresor"].value_counts().reset_index()
-            df_par.columns = ["Parentesco", "Casos"]
-            fig_par = px.bar(df_par, x="Parentesco", y="Casos",
-                             title="Parentesco del Agresor con la Víctima",
-                             color="Casos", color_continuous_scale="Reds",
-                             text="Casos")
-            fig_par.update_traces(textposition="outside")
-            fig_par.update_layout(xaxis_tickangle=-30,
-                                  showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_par, use_container_width=True)
+            df_sm = df_f["atencion_salud_mental"].value_counts().reset_index()
+            df_sm.columns = ["Atención", "Casos"]
+            fig = px.bar(df_sm, x="Atención", y="Casos",
+                         title="Atención por Salud Mental",
+                         color="Casos", color_continuous_scale="Blues", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
         with col2:
-            df_sa = df_filtrado["sexo_agresor"].value_counts().reset_index()
-            df_sa.columns = ["Sexo Agresor", "Casos"]
-            fig_sa = px.pie(df_sa, values="Casos", names="Sexo Agresor",
-                            title="Sexo del Agresor",
-                            color_discrete_sequence=["#1565C0", "#D32F2F", "#9E9E9E", "#757575"],
-                            hole=0.4)
-            fig_sa.update_traces(textinfo="percent+value")
-            st.plotly_chart(fig_sa, use_container_width=True)
+            df_psic = df_f["valoracion_psicologia"].value_counts().reset_index()
+            df_psic.columns = ["Valoración", "Casos"]
+            fig = px.bar(df_psic, x="Valoración", y="Casos",
+                         title="Valoración por Psicología",
+                         color="Casos", color_continuous_scale="Teal", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
 
-        df_conv = df_filtrado["convive_agresor"].value_counts().reset_index()
-        df_conv.columns = ["¿Convive con agresor?", "Casos"]
-        fig_conv = px.bar(df_conv, x="¿Convive con agresor?", y="Casos",
-                          title="¿La víctima convive con el agresor?",
-                          color="Casos", color_continuous_scale="Reds",
-                          text="Casos")
-        fig_conv.update_traces(textposition="outside")
-        fig_conv.update_layout(showlegend=False, coloraxis_showscale=False)
-        st.plotly_chart(fig_conv, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            df_psiq = df_f["valoracion_psiquiatria"].value_counts().reset_index()
+            df_psiq.columns = ["Valoración", "Casos"]
+            fig = px.bar(df_psiq, x="Valoración", y="Casos",
+                         title="Valoración por Psiquiatría",
+                         color="Casos", color_continuous_scale="Purples", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            df_ts = df_f["atencion_trabajo_social"].value_counts().reset_index()
+            df_ts.columns = ["Atención", "Casos"]
+            fig = px.bar(df_ts, x="Atención", y="Casos",
+                         title="Atención Trabajo Social",
+                         color="Casos", color_continuous_scale="Greens", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
 
+        col1, col2 = st.columns(2)
+        with col1:
+            df_rp = df_f["remision_proteccion"].value_counts().reset_index()
+            df_rp.columns = ["Remisión", "Casos"]
+            fig = px.bar(df_rp, x="Remisión", y="Casos",
+                         title="Remisión a protección (ICBF, Comisaría)",
+                         color="Casos", color_continuous_scale="Oranges", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            df_ra = df_f["reporte_autoridades"].value_counts().reset_index()
+            df_ra.columns = ["Reporte", "Casos"]
+            fig = px.bar(df_ra, x="Reporte", y="Casos",
+                         title="Reporte a autoridades (Fiscalía/Policía)",
+                         color="Casos", color_continuous_scale="Reds", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            df_as = df_f["asiste_servicios"].value_counts().reset_index()
+            df_as.columns = ["Asistencia", "Casos"]
+            fig = px.bar(df_as, x="Asistencia", y="Casos",
+                         title="¿Asiste a los servicios?",
+                         color="Casos", color_continuous_scale="Blues", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            df_ab = df_f["abandono_proceso"].value_counts().reset_index()
+            df_ab.columns = ["Abandono", "Casos"]
+            fig = px.bar(df_ab, x="Abandono", y="Casos",
+                         title="¿Abandonó el proceso?",
+                         color="Casos", color_continuous_scale="Reds", text="Casos")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ---- TAB 4: Alertas ----
     with tab4:
-        # ALERTA ROJA - Reincidentes
-        st.markdown("""
-        <div class="alerta-roja">
-            <strong>🚨 ALERTA ROJA — Pacientes con violencia previa (Reincidentes)</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        df_reinc = df_filtrado[df_filtrado["antec_violencia"].str.upper() == "SI"]
-        if not df_reinc.empty:
-            cols = ["numero_documento", "nombres", "apellidos", "municipio_residencia",
-                    "edad", "modalidad_violencia", "eps_reporta", "estado_caso"]
-            cols_disp = [c for c in cols if c in df_reinc.columns]
-            st.dataframe(df_reinc[cols_disp], use_container_width=True, hide_index=True)
-        else:
-            st.info("No se encontraron pacientes reincidentes con los filtros actuales.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ALERTA ROJA - Menores de 14
-        st.markdown("""
-        <div class="alerta-roja">
-            <strong>🚨 ALERTA ROJA — Menores de 14 años (reporte obligatorio a ICBF y Fiscalía)</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        df_menores = df_filtrado[df_filtrado["edad"] < 14]
-        if not df_menores.empty:
-            cols = ["numero_documento", "nombres", "apellidos", "edad", "sexo",
-                    "modalidad_violencia", "parentesco_agresor", "eps_reporta",
-                    "reporte_autoridades", "estado_caso"]
-            cols_disp = [c for c in cols if c in df_menores.columns]
-            st.dataframe(df_menores[cols_disp], use_container_width=True, hide_index=True)
-        else:
-            st.info("No se encontraron casos en menores de 14 años con los filtros actuales.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ALERTA ROJA - Gestantes
-        st.markdown("""
-        <div class="alerta-roja">
-            <strong>🚨 ALERTA ROJA — Gestantes</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        df_gest = df_filtrado[df_filtrado["gestante"].str.upper() == "SI"]
-        if not df_gest.empty:
+        st.markdown("""<div class="alerta-roja"><strong>🚨 ALERTA ROJA — Reincidentes (violencia previa)</strong></div>""",
+                    unsafe_allow_html=True)
+        df_r = df_f[df_f["antec_violencia"].str.upper() == "SI"]
+        if not df_r.empty:
             cols = ["numero_documento", "nombres", "apellidos", "edad",
-                    "semanas_gestacion", "modalidad_violencia", "eps_reporta", "estado_caso"]
-            cols_disp = [c for c in cols if c in df_gest.columns]
-            st.dataframe(df_gest[cols_disp], use_container_width=True, hide_index=True)
+                    "municipio_residencia", "eps_reporta", "estado_caso"]
+            cols_d = [c for c in cols if c in df_r.columns]
+            st.dataframe(df_r[cols_d], use_container_width=True, hide_index=True)
         else:
-            st.info("No se encontraron casos en gestantes con los filtros actuales.")
+            st.info("No hay reincidentes con los filtros actuales.")
 
         st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""<div class="alerta-roja"><strong>🚨 ALERTA ROJA — Menores de 14 años (reporte obligatorio a ICBF y Fiscalía)</strong></div>""",
+                    unsafe_allow_html=True)
+        df_m = df_f[df_f["edad"] < 14]
+        if not df_m.empty:
+            cols = ["numero_documento", "nombres", "apellidos", "edad", "sexo",
+                    "eps_reporta", "reporte_autoridades", "remision_proteccion", "estado_caso"]
+            cols_d = [c for c in cols if c in df_m.columns]
+            st.dataframe(df_m[cols_d], use_container_width=True, hide_index=True)
+        else:
+            st.info("No hay casos en menores de 14 años con los filtros actuales.")
 
-        # ALERTA AMARILLA - Sin seguimiento
-        st.markdown("""
-        <div class="alerta-amarilla">
-            <strong>⚠️ ALERTA AMARILLA — Activos sin seguimiento o sin contacto</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        df_sinseg = df_filtrado[
-            ((df_filtrado["estado_caso"].str.upper() == "ACTIVO") &
-             (df_filtrado["num_seguimientos_realizados"] == 0)) |
-            (df_filtrado["asiste_servicios"].str.upper().isin(["NO", "SIN CONTACTO"]))
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""<div class="alerta-amarilla"><strong>⚠️ ALERTA — Activos sin seguimiento o sin contacto</strong></div>""",
+                    unsafe_allow_html=True)
+        df_ss = df_f[
+            ((df_f["estado_caso"].str.upper() == "ACTIVO") & (df_f["num_seguimientos_realizados"] == 0)) |
+            (df_f["asiste_servicios"].str.upper().isin(["NO", "SIN CONTACTO"]))
         ]
-        if not df_sinseg.empty:
+        if not df_ss.empty:
             cols = ["numero_documento", "nombres", "apellidos", "municipio_residencia",
-                    "modalidad_violencia", "asiste_servicios", "num_seguimientos_realizados",
-                    "eps_reporta", "estado_caso"]
-            cols_disp = [c for c in cols if c in df_sinseg.columns]
-            st.dataframe(df_sinseg[cols_disp], use_container_width=True, hide_index=True)
+                    "asiste_servicios", "num_seguimientos_realizados", "eps_reporta", "estado_caso"]
+            cols_d = [c for c in cols if c in df_ss.columns]
+            st.dataframe(df_ss[cols_d], use_container_width=True, hide_index=True)
         else:
             st.info("No hay casos sin seguimiento con los filtros actuales.")
 
         st.markdown("<br>", unsafe_allow_html=True)
-
-        # ALERTA AMARILLA - Sin reporte a autoridades en casos graves
-        st.markdown("""
-        <div class="alerta-amarilla">
-            <strong>⚠️ ALERTA — Casos graves sin reporte a autoridades</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        mecanismos_graves = ["Cortopunzante", "Proyectil arma de fuego",
-                             "Quemadura por fuego", "Quemadura por ácido",
-                             "Quemadura por líquido hirviente", "Ahorcamiento/estrangulamiento"]
-        df_grave = df_filtrado[
-            (df_filtrado["mecanismo_agresion"].isin(mecanismos_graves)) &
-            (df_filtrado["reporte_autoridades"].str.upper() == "NO")
-        ]
-        if not df_grave.empty:
-            cols = ["numero_documento", "nombres", "apellidos", "edad",
-                    "modalidad_violencia", "mecanismo_agresion",
-                    "reporte_autoridades", "eps_reporta", "estado_caso"]
-            cols_disp = [c for c in cols if c in df_grave.columns]
-            st.dataframe(df_grave[cols_disp], use_container_width=True, hide_index=True)
-        else:
-            st.info("No hay casos graves sin reporte a autoridades con los filtros actuales.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ALERTA - Abandonos
-        st.markdown("""
-        <div class="alerta-amarilla">
-            <strong>⚠️ ALERTA — Pacientes que abandonaron el proceso</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        df_aband = df_filtrado[df_filtrado["abandono_proceso"].str.upper() == "SI"]
-        if not df_aband.empty:
+        st.markdown("""<div class="alerta-amarilla"><strong>⚠️ ALERTA — Pacientes que abandonaron el proceso</strong></div>""",
+                    unsafe_allow_html=True)
+        df_a = df_f[df_f["abandono_proceso"].str.upper() == "SI"]
+        if not df_a.empty:
             cols = ["numero_documento", "nombres", "apellidos", "municipio_residencia",
-                    "modalidad_violencia", "eps_reporta", "estado_caso"]
-            cols_disp = [c for c in cols if c in df_aband.columns]
-            st.dataframe(df_aband[cols_disp], use_container_width=True, hide_index=True)
+                    "eps_reporta", "estado_caso"]
+            cols_d = [c for c in cols if c in df_a.columns]
+            st.dataframe(df_a[cols_d], use_container_width=True, hide_index=True)
         else:
             st.info("No hay pacientes con abandono del proceso.")
 
 
 # ============================================================
-# MÓDULO 3: EDICIÓN Y ACTUALIZACIÓN DE CASOS
+# MÓDULO 3: EDITAR / ACTUALIZAR CASO
 # ============================================================
 
 def parse_date_safe(val):
-    """Convierte un valor a fecha, tolerando vacíos y errores."""
     try:
         if val and str(val).strip() and str(val).strip() != "None":
             return pd.to_datetime(val).date()
@@ -1373,7 +1072,6 @@ def parse_date_safe(val):
 
 
 def modulo_edicion(spreadsheet):
-    """Búsqueda y edición de registros existentes."""
     st.markdown("""
     <div class="main-header">
         <h1>✏️ Editar / Actualizar Caso</h1>
@@ -1388,43 +1086,48 @@ def modulo_edicion(spreadsheet):
         st.info("📭 No hay registros disponibles para editar.")
         return
 
+    # Si viene redirigido desde duplicado, prellenar búsqueda
+    busq_doc_default = st.session_state.pop("_edit_doc_busqueda", "")
+    if st.session_state.get("_ir_a_edicion"):
+        st.session_state.pop("_ir_a_edicion", None)
+
     st.markdown("#### 🔍 Buscar Registro")
     col1, col2 = st.columns([2, 2])
     with col1:
-        busq_doc = st.text_input("Buscar por número de documento", key="edit_busq_doc")
+        busq_doc = st.text_input("Buscar por número de documento",
+                                 value=busq_doc_default, key="edit_busq_doc")
     with col2:
         busq_nombre = st.text_input("Buscar por nombre o apellido", key="edit_busq_nombre")
 
-    df_resultado = df.copy()
+    df_r = df.copy()
     if busq_doc:
-        df_resultado = df_resultado[df_resultado["numero_documento"].astype(str).str.contains(busq_doc, na=False)]
+        df_r = df_r[df_r["numero_documento"].astype(str).str.contains(busq_doc, na=False)]
     if busq_nombre:
-        busq_upper = busq_nombre.upper()
-        df_resultado = df_resultado[
-            df_resultado["nombres"].astype(str).str.upper().str.contains(busq_upper, na=False) |
-            df_resultado["apellidos"].astype(str).str.upper().str.contains(busq_upper, na=False)
+        bu = busq_nombre.upper()
+        df_r = df_r[
+            df_r["nombres"].astype(str).str.upper().str.contains(bu, na=False) |
+            df_r["apellidos"].astype(str).str.upper().str.contains(bu, na=False)
         ]
 
-    if df_resultado.empty:
+    if df_r.empty:
         st.warning("No se encontraron registros con los criterios de búsqueda.")
         return
 
-    st.markdown(f"**{len(df_resultado)} registro(s) encontrado(s)**")
-    cols_tabla = ["id", "nombres", "apellidos", "numero_documento", "eps_reporta",
-                  "modalidad_violencia", "municipio_residencia", "edad",
-                  "estado_caso", "fecha_notificacion_sivigila"]
-    cols_disp = [c for c in cols_tabla if c in df_resultado.columns]
-    st.dataframe(df_resultado[cols_disp], use_container_width=True, hide_index=True)
+    st.markdown(f"**{len(df_r)} registro(s) encontrado(s)**")
+    cols_t = ["id", "nombres", "apellidos", "numero_documento", "eps_reporta",
+              "edad", "municipio_residencia", "estado_caso", "fecha_evento"]
+    cols_d = [c for c in cols_t if c in df_r.columns]
+    st.dataframe(df_r[cols_d], use_container_width=True, hide_index=True)
 
-    ids_disponibles = df_resultado["id"].tolist()
-    if not ids_disponibles:
+    ids = df_r["id"].tolist()
+    if not ids:
         return
 
     st.markdown("---")
-    id_seleccionado = st.selectbox("Seleccione el ID del registro a editar:", options=ids_disponibles)
+    id_sel = st.selectbox("Seleccione el ID del registro a editar:", options=ids)
 
-    if id_seleccionado:
-        registro = df_resultado[df_resultado["id"] == id_seleccionado].iloc[0].to_dict()
+    if id_sel:
+        registro = df_r[df_r["id"] == id_sel].iloc[0].to_dict()
 
         st.markdown(f"#### Editando: **{registro.get('nombres', '')} {registro.get('apellidos', '')}** "
                     f"(Doc: {registro.get('numero_documento', '')})")
@@ -1434,210 +1137,96 @@ def modulo_edicion(spreadsheet):
             st.markdown("##### 🏷️ Identificación")
             col1, col2 = st.columns(2)
             with col1:
-                eps_edit = st.selectbox("EPS/EAPB", options=EPS_LISTA,
-                                        index=EPS_LISTA.index(registro.get("eps_reporta", ""))
-                                        if registro.get("eps_reporta", "") in EPS_LISTA else 0)
-                semana_edit = st.number_input("Semana epidemiológica", min_value=1, max_value=53,
-                                              value=int(registro.get("semana_epidemiologica") or 1))
+                eps_e = st.selectbox("EPS/EAPB", options=EPS_LISTA,
+                                     index=EPS_LISTA.index(registro.get("eps_reporta", ""))
+                                     if registro.get("eps_reporta", "") in EPS_LISTA else 0)
+                semana_e = st.number_input("Semana epidemiológica", min_value=1, max_value=53,
+                                           value=int(registro.get("semana_epidemiologica") or 1))
             with col2:
                 antec_opts = ["NO", "SI", "SIN INFORMACIÓN"]
-                antec_edit = st.selectbox("¿Violencia previa?", options=antec_opts,
-                                          index=antec_opts.index(registro.get("antec_violencia", "NO"))
-                                          if registro.get("antec_violencia", "") in antec_opts else 0)
-                conf_edit = st.radio("¿Conflicto armado?", options=["NO", "SI"],
-                                     index=0 if registro.get("conflicto_armado", "NO") != "SI" else 1,
-                                     horizontal=True)
+                antec_e = st.selectbox("¿Violencia previa?", options=antec_opts,
+                                       index=antec_opts.index(registro.get("antec_violencia", "NO"))
+                                       if registro.get("antec_violencia", "") in antec_opts else 0)
 
-            # Paciente
-            st.markdown("##### 👤 Datos de la Víctima")
+            # Víctima
+            st.markdown("##### 👤 Víctima")
             col1, col2 = st.columns(2)
             with col1:
-                nombres_edit = st.text_input("Nombres", value=registro.get("nombres", ""))
-                tipo_doc_edit = st.selectbox("Tipo documento", options=TIPOS_DOCUMENTO,
-                                             index=TIPOS_DOCUMENTO.index(registro.get("tipo_documento", "CC"))
-                                             if registro.get("tipo_documento", "") in TIPOS_DOCUMENTO else 2)
-                edad_edit = st.number_input("Edad", min_value=0, max_value=120,
-                                            value=int(registro.get("edad") or 0))
-                ig_edit = st.selectbox("Identidad de género", options=IDENTIDADES_GENERO,
-                                       index=IDENTIDADES_GENERO.index(registro.get("identidad_genero", "Sin información"))
-                                       if registro.get("identidad_genero", "") in IDENTIDADES_GENERO else 5)
-                pe_edit = st.selectbox("Pertenencia étnica", options=PERTENENCIAS_ETNICAS,
-                                       index=PERTENENCIAS_ETNICAS.index(registro.get("pertenencia_etnica", "Ninguno"))
-                                       if registro.get("pertenencia_etnica", "") in PERTENENCIAS_ETNICAS else 6)
+                nom_e = st.text_input("Nombres", value=registro.get("nombres", ""))
+                tdoc_e = st.selectbox("Tipo documento", options=TIPOS_DOCUMENTO,
+                                      index=TIPOS_DOCUMENTO.index(registro.get("tipo_documento", "CC"))
+                                      if registro.get("tipo_documento", "") in TIPOS_DOCUMENTO else 2)
+                edad_e = st.number_input("Edad", min_value=0, max_value=120,
+                                         value=int(registro.get("edad") or 0))
             with col2:
-                apellidos_edit = st.text_input("Apellidos", value=registro.get("apellidos", ""))
-                num_doc_edit = st.text_input("Número de documento",
-                                             value=str(registro.get("numero_documento", "")))
+                ape_e = st.text_input("Apellidos", value=registro.get("apellidos", ""))
+                ndoc_e = st.text_input("Número de documento", value=str(registro.get("numero_documento", "")))
                 sexo_opts = ["Masculino", "Femenino", "Indeterminado"]
-                sexo_edit = st.selectbox("Sexo", options=sexo_opts,
-                                         index=sexo_opts.index(registro.get("sexo", "Femenino"))
-                                         if registro.get("sexo", "") in sexo_opts else 1)
-                os_edit = st.selectbox("Orientación sexual", options=ORIENTACIONES_SEXUALES,
-                                       index=ORIENTACIONES_SEXUALES.index(registro.get("orientacion_sexual",
-                                                                                       "Sin información"))
-                                       if registro.get("orientacion_sexual", "") in ORIENTACIONES_SEXUALES else 4)
-                mun_res_edit = st.selectbox("Municipio de residencia", options=[""] + MUNICIPIOS_VALLE,
-                                            index=(MUNICIPIOS_VALLE.index(registro.get("municipio_residencia", "")) + 1)
-                                            if registro.get("municipio_residencia", "") in MUNICIPIOS_VALLE else 0)
+                sexo_e = st.selectbox("Sexo", options=sexo_opts,
+                                      index=sexo_opts.index(registro.get("sexo", "Femenino"))
+                                      if registro.get("sexo", "") in sexo_opts else 1)
 
-            col1, col2 = st.columns(2)
-            with col1:
-                gest_opts = ["NO APLICA", "NO", "SI"]
-                gest_edit = st.selectbox("Gestante", options=gest_opts,
-                                         index=gest_opts.index(registro.get("gestante", "NO APLICA"))
-                                         if registro.get("gestante", "") in gest_opts else 0)
-                disc_edit = st.selectbox("Discapacidad", options=["NO", "SI"],
-                                         index=0 if registro.get("discapacidad", "NO") != "SI" else 1)
-            with col2:
-                semgest_edit = st.number_input("Semanas de gestación", min_value=0, max_value=42,
-                                               value=int(registro.get("semanas_gestacion") or 0))
-                gp_actual = [g.strip() for g in str(registro.get("grupos_poblacionales", "")).split(",") if g.strip()]
-                gp_edit = st.multiselect("Grupos poblacionales", options=GRUPOS_POBLACIONALES,
-                                         default=[g for g in gp_actual if g in GRUPOS_POBLACIONALES])
-
-            # Hecho
-            st.markdown("##### 🎯 Datos del Hecho")
-            col1, col2 = st.columns(2)
-            with col1:
-                mod_edit = st.selectbox("Modalidad de violencia", options=MODALIDADES_VIOLENCIA,
-                                        index=MODALIDADES_VIOLENCIA.index(registro.get("modalidad_violencia", "FÍSICA"))
-                                        if registro.get("modalidad_violencia", "") in MODALIDADES_VIOLENCIA else 0)
-                fhecho_edit = st.date_input("Fecha del hecho",
-                                            value=parse_date_safe(registro.get("fecha_hecho")))
-                mun_hecho_edit = st.selectbox("Municipio del hecho", options=[""] + MUNICIPIOS_VALLE,
-                                              index=(MUNICIPIOS_VALLE.index(registro.get("municipio_hecho", "")) + 1)
-                                              if registro.get("municipio_hecho", "") in MUNICIPIOS_VALLE else 0)
-                esc_edit = st.selectbox("Escenario", options=ESCENARIOS,
-                                        index=ESCENARIOS.index(registro.get("escenario", "Vivienda"))
-                                        if registro.get("escenario", "") in ESCENARIOS else 0)
-            with col2:
-                hora_edit = st.text_input("Hora del hecho", value=str(registro.get("hora_hecho", "")))
-                mec_edit = st.selectbox("Mecanismo de la agresión", options=MECANISMOS_AGRESION,
-                                        index=MECANISMOS_AGRESION.index(registro.get("mecanismo_agresion", "NO APLICA"))
-                                        if registro.get("mecanismo_agresion", "") in MECANISMOS_AGRESION else 0)
-                amb_edit = st.selectbox("Ámbito", options=AMBITOS,
-                                        index=AMBITOS.index(registro.get("ambito", "Hogar"))
-                                        if registro.get("ambito", "") in AMBITOS else 0)
-                act_edit = st.selectbox("Actividad de la víctima", options=ACTIVIDADES_VICTIMA,
-                                        index=ACTIVIDADES_VICTIMA.index(registro.get("actividad_victima", "Ninguna"))
-                                        if registro.get("actividad_victima", "") in ACTIVIDADES_VICTIMA else 9)
-
-            col1, col2, col3 = st.columns(3)
-            sino_si = ["NO", "SI", "SIN INFORMACIÓN"]
-            with col1:
-                cspa_edit = st.selectbox("Consumo SPA víctima", options=sino_si,
-                                         index=sino_si.index(registro.get("consumo_spa_victima", "NO"))
-                                         if registro.get("consumo_spa_victima", "") in sino_si else 0)
-            with col2:
-                calc_edit = st.selectbox("Consumo alcohol víctima", options=sino_si,
-                                         index=sino_si.index(registro.get("consumo_alcohol_victima", "NO"))
-                                         if registro.get("consumo_alcohol_victima", "") in sino_si else 0)
-            with col3:
-                jh_edit = st.selectbox("Jefatura de hogar", options=["NO", "SI"],
-                                       index=0 if registro.get("jefatura_hogar", "NO") != "SI" else 1)
-
-            # Agresor
-            st.markdown("##### 👥 Agresor")
-            col1, col2 = st.columns(2)
-            sa_opts = ["Masculino", "Femenino", "Intersexual", "Sin dato"]
-            with col1:
-                sa_edit = st.selectbox("Sexo del agresor", options=sa_opts,
-                                       index=sa_opts.index(registro.get("sexo_agresor", "Masculino"))
-                                       if registro.get("sexo_agresor", "") in sa_opts else 0)
-                par_edit = st.selectbox("Parentesco", options=PARENTESCOS_AGRESOR,
-                                        index=PARENTESCOS_AGRESOR.index(registro.get("parentesco_agresor", "Ninguno"))
-                                        if registro.get("parentesco_agresor", "") in PARENTESCOS_AGRESOR else 7)
-            with col2:
-                ea_edit = st.number_input("Edad del agresor", min_value=0, max_value=120,
-                                          value=int(registro.get("edad_agresor") or 0))
-                conv_edit = st.selectbox("¿Convive con agresor?", options=["NO", "SI"],
-                                         index=0 if registro.get("convive_agresor", "NO") != "SI" else 1)
-
-            anf_opts = ["No aplica"] + RELACIONES_NO_FAMILIAR
-            anf_edit = st.selectbox("Agresor no familiar (relación)", options=anf_opts,
-                                    index=anf_opts.index(registro.get("agresor_no_familiar", "No aplica"))
-                                    if registro.get("agresor_no_familiar", "") in anf_opts else 0)
+            mun_e = st.selectbox("Municipio de residencia", options=[""] + MUNICIPIOS_VALLE,
+                                 index=(MUNICIPIOS_VALLE.index(registro.get("municipio_residencia", "")) + 1)
+                                 if registro.get("municipio_residencia", "") in MUNICIPIOS_VALLE else 0)
 
             # Notificación / Atención
             st.markdown("##### 📋 Notificación y Atención")
             col1, col2 = st.columns(2)
             with col1:
-                fnotif_edit = st.date_input("Fecha notificación SIVIGILA",
-                                            value=parse_date_safe(registro.get("fecha_notificacion_sivigila")))
-                fcons_edit = st.date_input("Fecha de consulta",
-                                           value=parse_date_safe(registro.get("fecha_consulta")))
-                finic_edit = st.date_input("Fecha inicio síntomas",
-                                           value=parse_date_safe(registro.get("fecha_inicio_sintomas")))
-                upgd_edit = st.text_input("UPGD/IPS", value=registro.get("upgd_atencion", ""))
+                fev_e = st.date_input("Fecha del evento",
+                                      value=parse_date_safe(registro.get("fecha_evento")))
+                upgd_e = st.text_input("UPGD/IPS", value=registro.get("upgd_atencion", ""))
             with col2:
-                mun_at_edit = st.selectbox("Municipio atención", options=[""] + MUNICIPIOS_VALLE,
-                                           index=(MUNICIPIOS_VALLE.index(registro.get("municipio_atencion", "")) + 1)
-                                           if registro.get("municipio_atencion", "") in MUNICIPIOS_VALLE else 0)
-                fat_edit = st.date_input("Fecha de la atención",
-                                         value=parse_date_safe(registro.get("fecha_atencion")))
-                hosp_opts = ["NO", "SI", "NO APLICA"]
-                hosp_edit = st.selectbox("Hospitalizado", options=hosp_opts,
-                                         index=hosp_opts.index(registro.get("hospitalizado", "NO"))
-                                         if registro.get("hospitalizado", "") in hosp_opts else 0)
+                muna_e = st.selectbox("Municipio de la atención", options=[""] + MUNICIPIOS_VALLE,
+                                      index=(MUNICIPIOS_VALLE.index(registro.get("municipio_atencion", "")) + 1)
+                                      if registro.get("municipio_atencion", "") in MUNICIPIOS_VALLE else 0)
+                fat_e = st.date_input("Fecha de la atención",
+                                      value=parse_date_safe(registro.get("fecha_atencion")))
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                fhosp_edit = st.date_input("Fecha hospitalización",
-                                           value=parse_date_safe(registro.get("fecha_hospitalizacion")))
-            with col2:
-                falta_edit = st.date_input("Fecha de alta",
-                                           value=parse_date_safe(registro.get("fecha_alta")))
-            with col3:
-                cf_opts = ["VIVO", "MUERTO", "NO SABE"]
-                cf_edit = st.selectbox("Condición final", options=cf_opts,
-                                       index=cf_opts.index(registro.get("condicion_final", "VIVO"))
-                                       if registro.get("condicion_final", "") in cf_opts else 0)
-
-            fdef_edit = st.date_input("Fecha de defunción",
-                                      value=parse_date_safe(registro.get("fecha_defuncion")))
-
-            # Salud Mental
+            # Atención en Salud
             st.markdown("##### 🧠 Atención Integral en Salud")
             sino_na = ["NO", "SI", "NO APLICA"]
             col1, col2 = st.columns(2)
             with col1:
-                asm_edit = st.selectbox("Atención Salud Mental", options=sino_na,
-                                        index=sino_na.index(registro.get("atencion_salud_mental", "NO"))
-                                        if registro.get("atencion_salud_mental", "") in sino_na else 0)
-                fsm_edit = st.date_input("Fecha Salud Mental",
-                                         value=parse_date_safe(registro.get("fecha_salud_mental")))
-                vp_edit = st.selectbox("Valoración Psicología", options=sino_na,
-                                       index=sino_na.index(registro.get("valoracion_psicologia", "NO"))
-                                       if registro.get("valoracion_psicologia", "") in sino_na else 0)
-                fpsic_edit = st.date_input("Fecha Psicología",
-                                           value=parse_date_safe(registro.get("fecha_psicologia")))
-                amg_edit = st.selectbox("Atención Medicina General", options=sino_na,
-                                        index=sino_na.index(registro.get("atencion_medicina_general", "NO"))
-                                        if registro.get("atencion_medicina_general", "") in sino_na else 0)
-                ats_edit = st.selectbox("Atención Trabajo Social", options=sino_na,
-                                        index=sino_na.index(registro.get("atencion_trabajo_social", "NO"))
-                                        if registro.get("atencion_trabajo_social", "") in sino_na else 0)
+                asm_e = st.selectbox("Atención Salud Mental", options=sino_na,
+                                     index=sino_na.index(registro.get("atencion_salud_mental", "NO"))
+                                     if registro.get("atencion_salud_mental", "") in sino_na else 0)
+                fsm_e = st.date_input("Fecha Salud Mental",
+                                      value=parse_date_safe(registro.get("fecha_salud_mental")))
+                vp_e = st.selectbox("Valoración Psicología", options=sino_na,
+                                    index=sino_na.index(registro.get("valoracion_psicologia", "NO"))
+                                    if registro.get("valoracion_psicologia", "") in sino_na else 0)
+                fps_e = st.date_input("Fecha Psicología",
+                                      value=parse_date_safe(registro.get("fecha_psicologia")))
             with col2:
-                vpq_edit = st.selectbox("Valoración Psiquiatría", options=sino_na,
-                                        index=sino_na.index(registro.get("valoracion_psiquiatria", "NO"))
-                                        if registro.get("valoracion_psiquiatria", "") in sino_na else 0)
-                fpsiq_edit = st.date_input("Fecha Psiquiatría",
-                                           value=parse_date_safe(registro.get("fecha_psiquiatria")))
-                aso_edit = st.selectbox("Atención Salud Ocupacional", options=sino_na,
-                                        index=sino_na.index(registro.get("atencion_salud_ocupacional", "NO"))
-                                        if registro.get("atencion_salud_ocupacional", "") in sino_na else 0)
-                rp_edit = st.selectbox("Remisión a protección", options=sino_na,
-                                       index=sino_na.index(registro.get("remision_proteccion", "NO"))
-                                       if registro.get("remision_proteccion", "") in sino_na else 0)
-                ra_edit = st.selectbox("Reporte a autoridades", options=sino_na,
-                                       index=sino_na.index(registro.get("reporte_autoridades", "NO"))
-                                       if registro.get("reporte_autoridades", "") in sino_na else 0)
+                vpq_e = st.selectbox("Valoración Psiquiatría", options=sino_na,
+                                     index=sino_na.index(registro.get("valoracion_psiquiatria", "NO"))
+                                     if registro.get("valoracion_psiquiatria", "") in sino_na else 0)
+                fpq_e = st.date_input("Fecha Psiquiatría",
+                                      value=parse_date_safe(registro.get("fecha_psiquiatria")))
+                ats_e = st.selectbox("Atención Trabajo Social", options=sino_na,
+                                     index=sino_na.index(registro.get("atencion_trabajo_social", "NO"))
+                                     if registro.get("atencion_trabajo_social", "") in sino_na else 0)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                rp_e = st.selectbox("Remisión a protección", options=sino_na,
+                                    index=sino_na.index(registro.get("remision_proteccion", "NO"))
+                                    if registro.get("remision_proteccion", "") in sino_na else 0)
+            with col2:
+                ra_e = st.selectbox("Reporte a autoridades", options=sino_na,
+                                    index=sino_na.index(registro.get("reporte_autoridades", "NO"))
+                                    if registro.get("reporte_autoridades", "") in sino_na else 0)
 
             # Seguimientos
             st.markdown("##### 📞 Seguimientos")
-            seg1_edit = st.text_input("Seguimiento 1", value=str(registro.get("seguimiento_1", "")))
-            seg2_edit = st.text_input("Seguimiento 2", value=str(registro.get("seguimiento_2", "")))
-            seg3_edit = st.text_input("Seguimiento 3", value=str(registro.get("seguimiento_3", "")))
+            seg1_e = st.text_input("Seguimiento 1", value=str(registro.get("seguimiento_1", "")),
+                                   placeholder="Ej: 13/03/2026 PSICOLOGÍA")
+            seg2_e = st.text_input("Seguimiento 2", value=str(registro.get("seguimiento_2", "")),
+                                   placeholder="Ej: 20/03/2026 TRABAJO SOCIAL")
+            seg3_e = st.text_input("Seguimiento 3", value=str(registro.get("seguimiento_3", "")),
+                                   placeholder="Ej: 27/03/2026 PSIQUIATRÍA")
 
             # Estado
             st.markdown("##### 📊 Estado del Caso")
@@ -1646,122 +1235,88 @@ def modulo_edicion(spreadsheet):
             asiste_opts = ["SI", "NO", "SIN CONTACTO"]
             ab_opts = ["NO", "SI", "SIN INFORMACIÓN"]
             with col1:
-                ruta_edit = st.selectbox("¿En ruta de atención integral?", options=ruta_opts,
-                                         index=ruta_opts.index(registro.get("ruta_atencion_integral", "SI"))
-                                         if registro.get("ruta_atencion_integral", "") in ruta_opts else 0)
-                asiste_edit = st.selectbox("¿Asiste a servicios?", options=asiste_opts,
-                                           index=asiste_opts.index(registro.get("asiste_servicios", "SI"))
-                                           if registro.get("asiste_servicios", "") in asiste_opts else 0)
-                num_seg_edit = st.number_input("Nº seguimientos realizados", min_value=0, max_value=50,
-                                               value=int(registro.get("num_seguimientos_realizados") or 0))
+                ruta_e = st.selectbox("¿En ruta de atención integral?", options=ruta_opts,
+                                      index=ruta_opts.index(registro.get("ruta_atencion_integral", "SI"))
+                                      if registro.get("ruta_atencion_integral", "") in ruta_opts else 0)
+                asiste_e = st.selectbox("¿Asiste a servicios?", options=asiste_opts,
+                                        index=asiste_opts.index(registro.get("asiste_servicios", "SI"))
+                                        if registro.get("asiste_servicios", "") in asiste_opts else 0)
+                num_seg_e = st.number_input("Nº seguimientos realizados", min_value=0, max_value=50,
+                                            value=int(registro.get("num_seguimientos_realizados") or 0))
             with col2:
-                aban_edit = st.selectbox("¿Abandonó el proceso?", options=ab_opts,
-                                         index=ab_opts.index(registro.get("abandono_proceso", "NO"))
-                                         if registro.get("abandono_proceso", "") in ab_opts else 0)
-                rein_edit = st.selectbox("¿Reincidencia / nuevo evento?", options=ab_opts,
-                                         index=ab_opts.index(registro.get("reincidencia_nuevo_evento", "NO"))
-                                         if registro.get("reincidencia_nuevo_evento", "") in ab_opts else 0)
-                est_edit = st.selectbox("Estado del caso", options=ESTADOS_CASO,
-                                        index=ESTADOS_CASO.index(registro.get("estado_caso", "ACTIVO"))
-                                        if registro.get("estado_caso", "") in ESTADOS_CASO else 0)
+                aban_e = st.selectbox("¿Abandonó el proceso?", options=ab_opts,
+                                      index=ab_opts.index(registro.get("abandono_proceso", "NO"))
+                                      if registro.get("abandono_proceso", "") in ab_opts else 0)
+                rein_e = st.selectbox("¿Reincidencia / nuevo evento?", options=ab_opts,
+                                      index=ab_opts.index(registro.get("reincidencia_nuevo_evento", "NO"))
+                                      if registro.get("reincidencia_nuevo_evento", "") in ab_opts else 0)
+                est_e = st.selectbox("Estado del caso", options=ESTADOS_CASO,
+                                     index=ESTADOS_CASO.index(registro.get("estado_caso", "ACTIVO"))
+                                     if registro.get("estado_caso", "") in ESTADOS_CASO else 0)
 
-            obs_edit = st.text_area("Observaciones", value=str(registro.get("observaciones", "")), height=120)
+            obs_e = st.text_area("Observaciones", value=str(registro.get("observaciones", "")), height=120,
+                                 placeholder="Bitácora de gestión: llamadas, notas, derivaciones...")
 
-            submitted_edit = st.form_submit_button("💾 Guardar Cambios",
-                                                   use_container_width=True, type="primary")
+            submitted_e = st.form_submit_button("💾 Guardar Cambios",
+                                                use_container_width=True, type="primary")
 
-            if submitted_edit:
-                datos_actualizados = {
-                    "id": id_seleccionado,
+            if submitted_e:
+                datos_act = {
+                    "id": id_sel,
                     "fecha_digitacion": registro.get("fecha_digitacion", ""),
                     "funcionario_reporta": registro.get("funcionario_reporta", ""),
-                    "eps_reporta": eps_edit,
-                    "semana_epidemiologica": str(semana_edit),
-                    "nombres": nombres_edit.upper().strip(),
-                    "apellidos": apellidos_edit.upper().strip(),
-                    "tipo_documento": tipo_doc_edit,
-                    "numero_documento": num_doc_edit.strip(),
-                    "edad": str(edad_edit),
-                    "curso_vida": calcular_curso_vida(edad_edit),
-                    "sexo": sexo_edit,
-                    "identidad_genero": ig_edit,
-                    "orientacion_sexual": os_edit,
-                    "pertenencia_etnica": pe_edit,
-                    "municipio_residencia": mun_res_edit,
-                    "gestante": gest_edit,
-                    "semanas_gestacion": str(semgest_edit),
-                    "discapacidad": disc_edit,
-                    "grupos_poblacionales": ", ".join(gp_edit),
-                    "modalidad_violencia": mod_edit,
-                    "fecha_hecho": str(fhecho_edit) if fhecho_edit else "",
-                    "hora_hecho": hora_edit,
-                    "municipio_hecho": mun_hecho_edit,
-                    "mecanismo_agresion": mec_edit,
-                    "escenario": esc_edit,
-                    "ambito": amb_edit,
-                    "consumo_spa_victima": cspa_edit,
-                    "consumo_alcohol_victima": calc_edit,
-                    "jefatura_hogar": jh_edit,
-                    "actividad_victima": act_edit,
-                    "antec_violencia": antec_edit,
-                    "conflicto_armado": conf_edit,
-                    "sexo_agresor": sa_edit,
-                    "edad_agresor": str(ea_edit),
-                    "parentesco_agresor": par_edit,
-                    "convive_agresor": conv_edit,
-                    "agresor_no_familiar": anf_edit,
-                    "fecha_notificacion_sivigila": str(fnotif_edit) if fnotif_edit else "",
-                    "fecha_consulta": str(fcons_edit) if fcons_edit else "",
-                    "fecha_inicio_sintomas": str(finic_edit) if finic_edit else "",
-                    "upgd_atencion": upgd_edit,
-                    "municipio_atencion": mun_at_edit,
-                    "fecha_atencion": str(fat_edit) if fat_edit else "",
-                    "hospitalizado": hosp_edit,
-                    "fecha_hospitalizacion": str(fhosp_edit) if fhosp_edit else "",
-                    "fecha_alta": str(falta_edit) if falta_edit else "",
-                    "condicion_final": cf_edit,
-                    "fecha_defuncion": str(fdef_edit) if fdef_edit else "",
-                    "atencion_salud_mental": asm_edit,
-                    "fecha_salud_mental": str(fsm_edit) if fsm_edit else "",
-                    "valoracion_psicologia": vp_edit,
-                    "fecha_psicologia": str(fpsic_edit) if fpsic_edit else "",
-                    "valoracion_psiquiatria": vpq_edit,
-                    "fecha_psiquiatria": str(fpsiq_edit) if fpsiq_edit else "",
-                    "atencion_medicina_general": amg_edit,
-                    "atencion_trabajo_social": ats_edit,
-                    "atencion_salud_ocupacional": aso_edit,
-                    "remision_proteccion": rp_edit,
-                    "reporte_autoridades": ra_edit,
-                    "seguimiento_1": seg1_edit,
-                    "seguimiento_2": seg2_edit,
-                    "seguimiento_3": seg3_edit,
-                    "ruta_atencion_integral": ruta_edit,
-                    "asiste_servicios": asiste_edit,
-                    "num_seguimientos_realizados": str(num_seg_edit),
-                    "abandono_proceso": aban_edit,
-                    "reincidencia_nuevo_evento": rein_edit,
-                    "estado_caso": est_edit,
-                    "observaciones": obs_edit,
+                    "eps_reporta": eps_e,
+                    "semana_epidemiologica": str(semana_e),
+                    "antec_violencia": antec_e,
+                    "nombres": nom_e.upper().strip(),
+                    "apellidos": ape_e.upper().strip(),
+                    "tipo_documento": tdoc_e,
+                    "numero_documento": ndoc_e.strip(),
+                    "edad": str(edad_e),
+                    "sexo": sexo_e,
+                    "curso_vida": calcular_curso_vida(edad_e),
+                    "municipio_residencia": mun_e,
+                    "fecha_evento": str(fev_e) if fev_e else "",
+                    "upgd_atencion": upgd_e,
+                    "municipio_atencion": muna_e,
+                    "fecha_atencion": str(fat_e) if fat_e else "",
+                    "atencion_salud_mental": asm_e,
+                    "fecha_salud_mental": str(fsm_e) if fsm_e else "",
+                    "valoracion_psicologia": vp_e,
+                    "fecha_psicologia": str(fps_e) if fps_e else "",
+                    "valoracion_psiquiatria": vpq_e,
+                    "fecha_psiquiatria": str(fpq_e) if fpq_e else "",
+                    "atencion_trabajo_social": ats_e,
+                    "remision_proteccion": rp_e,
+                    "reporte_autoridades": ra_e,
+                    "seguimiento_1": seg1_e,
+                    "seguimiento_2": seg2_e,
+                    "seguimiento_3": seg3_e,
+                    "ruta_atencion_integral": ruta_e,
+                    "asiste_servicios": asiste_e,
+                    "num_seguimientos_realizados": str(num_seg_e),
+                    "abandono_proceso": aban_e,
+                    "reincidencia_nuevo_evento": rein_e,
+                    "estado_caso": est_e,
+                    "observaciones": obs_e,
                 }
 
                 with st.spinner("Actualizando registro..."):
                     exito, msg = actualizar_registro(
-                        spreadsheet, id_seleccionado, datos_actualizados,
+                        spreadsheet, id_sel, datos_act,
                         st.session_state.get("nombre_completo", "")
                     )
                 if exito:
-                    st.success(f"✅ Registro actualizado para "
-                               f"**{nombres_edit.upper()} {apellidos_edit.upper()}**")
+                    st.success(f"✅ Registro actualizado para **{nom_e.upper()} {ape_e.upper()}**")
                 else:
                     st.error(f"❌ Error al actualizar: {msg}")
 
 
 # ============================================================
-# MÓDULO 4: EXPORTACIÓN DE DATOS
+# MÓDULO 4: EXPORTACIÓN
 # ============================================================
 
 def modulo_exportacion(spreadsheet):
-    """Exportación de datos a CSV y Excel."""
     st.markdown("""
     <div class="main-header">
         <h1>📥 Exportación de Datos</h1>
@@ -1778,35 +1333,39 @@ def modulo_exportacion(spreadsheet):
 
     st.markdown(f"**Total de registros disponibles: {len(df)}**")
 
-    with st.expander("🔽 Filtrar datos antes de exportar"):
+    with st.expander("🔽 Filtrar antes de exportar"):
         col1, col2 = st.columns(2)
         with col1:
-            exp_eps = st.multiselect("EPS", options=sorted(df["eps_reporta"].unique().tolist()), key="exp_eps")
-            exp_mun = st.multiselect("Municipio del hecho",
-                                     options=sorted(df["municipio_hecho"].unique().tolist()), key="exp_mun")
+            exp_eps = st.multiselect("EPS", options=sorted(df["eps_reporta"].unique().tolist()),
+                                     key="exp_eps")
+            exp_mun = st.multiselect("Municipio de residencia",
+                                     options=sorted(df["municipio_residencia"].unique().tolist()),
+                                     key="exp_mun")
         with col2:
-            exp_mod = st.multiselect("Modalidad",
-                                     options=sorted(df["modalidad_violencia"].unique().tolist()), key="exp_mod")
             exp_estado = st.multiselect("Estado",
-                                        options=sorted(df["estado_caso"].unique().tolist()), key="exp_estado")
+                                        options=sorted(df["estado_caso"].unique().tolist()),
+                                        key="exp_estado")
+            exp_curso = st.multiselect("Curso de vida",
+                                       options=sorted(df["curso_vida"].unique().tolist()),
+                                       key="exp_curso")
 
-    df_export = df.copy()
+    df_e = df.copy()
     if exp_eps:
-        df_export = df_export[df_export["eps_reporta"].isin(exp_eps)]
+        df_e = df_e[df_e["eps_reporta"].isin(exp_eps)]
     if exp_mun:
-        df_export = df_export[df_export["municipio_hecho"].isin(exp_mun)]
-    if exp_mod:
-        df_export = df_export[df_export["modalidad_violencia"].isin(exp_mod)]
+        df_e = df_e[df_e["municipio_residencia"].isin(exp_mun)]
     if exp_estado:
-        df_export = df_export[df_export["estado_caso"].isin(exp_estado)]
+        df_e = df_e[df_e["estado_caso"].isin(exp_estado)]
+    if exp_curso:
+        df_e = df_e[df_e["curso_vida"].isin(exp_curso)]
 
-    st.markdown(f"**Registros a exportar (con filtros): {len(df_export)}**")
+    st.markdown(f"**Registros a exportar: {len(df_e)}**")
     st.markdown("---")
 
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("#### 📄 Descargar CSV")
-        csv_data = df_export.to_csv(index=False).encode("utf-8-sig")
+        csv_data = df_e.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             label="⬇️ Descargar CSV",
             data=csv_data,
@@ -1817,15 +1376,9 @@ def modulo_exportacion(spreadsheet):
 
     with col2:
         st.markdown("#### 📊 Descargar Excel (.xlsx)")
-        st.markdown("*Con hojas separadas por modalidad*")
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            df_export.to_excel(writer, sheet_name="TODOS_LOS_DATOS", index=False)
-            for modalidad in MODALIDADES_VIOLENCIA:
-                df_mod = df_export[df_export["modalidad_violencia"] == modalidad]
-                if not df_mod.empty:
-                    nombre_hoja = modalidad.split()[0][:31]
-                    df_mod.to_excel(writer, sheet_name=nombre_hoja, index=False)
+            df_e.to_excel(writer, sheet_name="TODOS_LOS_DATOS", index=False)
         buffer.seek(0)
         st.download_button(
             label="⬇️ Descargar Excel",
@@ -1836,16 +1389,15 @@ def modulo_exportacion(spreadsheet):
         )
 
     st.markdown("---")
-    st.markdown("#### 👁️ Vista previa de los datos")
-    st.dataframe(df_export, use_container_width=True, hide_index=True)
+    st.markdown("#### 👁️ Vista previa")
+    st.dataframe(df_e, use_container_width=True, hide_index=True)
 
 
 # ============================================================
-# MÓDULO 5: GESTIÓN DE USUARIOS (solo SECRETARÍA)
+# MÓDULO 5: GESTIÓN DE USUARIOS
 # ============================================================
 
 def modulo_gestion_usuarios(spreadsheet):
-    """Gestión de usuarios (solo administrador)."""
     st.markdown("""
     <div class="main-header">
         <h1>⚙️ Gestión de Usuarios</h1>
@@ -1859,45 +1411,42 @@ def modulo_gestion_usuarios(spreadsheet):
 
     st.markdown("#### 👥 Usuarios registrados")
     try:
-        hoja_usuarios = obtener_hoja_usuarios(spreadsheet)
-        registros = hoja_usuarios.get_all_records()
-        df_usuarios = pd.DataFrame(registros)
-        if not df_usuarios.empty:
-            df_mostrar = df_usuarios[["usuario", "nombre_completo", "rol", "eps_asignada"]].copy()
-            st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+        hoja_u = obtener_hoja_usuarios(spreadsheet)
+        registros = hoja_u.get_all_records()
+        df_u = pd.DataFrame(registros)
+        if not df_u.empty:
+            st.dataframe(df_u[["usuario", "nombre_completo", "rol", "eps_asignada"]],
+                         use_container_width=True, hide_index=True)
         else:
             st.info("No hay usuarios registrados.")
     except Exception as e:
         st.error(f"Error al cargar usuarios: {str(e)}")
 
     st.markdown("---")
-
     st.markdown("#### ➕ Crear Nuevo Usuario")
     with st.form("form_nuevo_usuario", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            nuevo_usuario = st.text_input("Nombre de usuario *", placeholder="Ej: digitador.sura")
-            nueva_password = st.text_input("Contraseña *", type="password")
-            confirmar_password = st.text_input("Confirmar contraseña *", type="password")
+            n_user = st.text_input("Nombre de usuario *", placeholder="Ej: digitador.sura")
+            n_pass = st.text_input("Contraseña *", type="password")
+            n_pass2 = st.text_input("Confirmar contraseña *", type="password")
         with col2:
-            nuevo_nombre = st.text_input("Nombre completo *", placeholder="Ej: María García López")
-            nuevo_rol = st.selectbox("Rol *", options=["EPS", "SECRETARÍA"])
-            nueva_eps = st.selectbox("EPS asignada (solo para rol EPS)",
-                                     options=["N/A"] + [e for e in EPS_LISTA if e != "OTRA (especificar)"])
+            n_nom = st.text_input("Nombre completo *", placeholder="Ej: María García")
+            n_rol = st.selectbox("Rol *", options=["EPS", "SECRETARÍA"])
+            n_eps = st.selectbox("EPS asignada (solo rol EPS)",
+                                 options=["N/A"] + [e for e in EPS_LISTA if e != "OTRA (especificar)"])
 
         crear = st.form_submit_button("✅ Crear Usuario", use_container_width=True, type="primary")
-
         if crear:
-            if not nuevo_usuario or not nueva_password or not nuevo_nombre:
+            if not n_user or not n_pass or not n_nom:
                 st.error("⚠️ Todos los campos marcados con * son obligatorios.")
-            elif nueva_password != confirmar_password:
+            elif n_pass != n_pass2:
                 st.error("⚠️ Las contraseñas no coinciden.")
-            elif len(nueva_password) < 6:
+            elif len(n_pass) < 6:
                 st.error("⚠️ La contraseña debe tener al menos 6 caracteres.")
             else:
-                eps_asig = nueva_eps if nuevo_rol == "EPS" and nueva_eps != "N/A" else ""
-                exito, msg = crear_usuario(spreadsheet, nuevo_usuario, nueva_password,
-                                           nuevo_nombre, nuevo_rol, eps_asig)
+                eps_a = n_eps if n_rol == "EPS" and n_eps != "N/A" else ""
+                exito, msg = crear_usuario(spreadsheet, n_user, n_pass, n_nom, n_rol, eps_a)
                 if exito:
                     st.success(f"✅ {msg}")
                     st.rerun()
@@ -1906,92 +1455,10 @@ def modulo_gestion_usuarios(spreadsheet):
 
 
 # ============================================================
-# MÓDULO 6: CARGA DE BASE HISTÓRICA (solo SECRETARÍA)
+# MÓDULO 6: CARGA MASIVA (solo SECRETARÍA)
 # ============================================================
 
-# Mapeo de códigos del archivo SIVIGILA al esquema del aplicativo
-MAP_NATURALEZA_MODALIDAD = {
-    1: "FÍSICA",
-    2: "PSICOLÓGICA",
-    3: "NEGLIGENCIA Y ABANDONO",
-}
-
-MAP_MECANISMO = {
-    1: "Ahorcamiento/estrangulamiento",
-    2: "Caídas",
-    3: "Contundente",
-    4: "Cortopunzante",
-    11: "Proyectil arma de fuego",
-    12: "Quemadura por fuego",
-    13: "Quemadura por ácido",
-    14: "Quemadura por líquido hirviente",
-    15: "Otros",
-    16: "Sustancias domésticas",
-}
-
-MAP_ESCENARIO = {
-    1: "Vía pública",
-    2: "Vivienda",
-    3: "Establecimiento educativo",
-    4: "Lugar de trabajo",
-    7: "Otro",
-    8: "Comercio",
-    9: "Espacios abiertos",
-    10: "Lugares con expendio de alcohol",
-    11: "Institución de salud",
-    12: "Área deportiva",
-}
-
-MAP_AMBITO = {
-    1: "Escolar",
-    2: "Laboral",
-    3: "Institucional",
-    4: "Virtual",
-    5: "Comunitario",
-    6: "Hogar",
-    7: "Otros",
-}
-
-MAP_PARENTESCO = {
-    9: "Padre",
-    10: "Madre",
-    22: "Pareja",
-    23: "Ex-Pareja",
-    24: "Otro familiar",
-    25: "Ninguno",
-}
-
-MAP_REL_NO_FAMILIAR = {
-    1: "Profesor",
-    2: "Amigo",
-    3: "Compañero de trabajo",
-    4: "Compañero de estudio",
-    6: "Desconocido",
-    7: "Vecino",
-    8: "Conocido sin trato",
-    9: "Sin información",
-    10: "Otro",
-    11: "Jefe",
-    12: "Sacerdote/Pastor",
-    13: "Servidor público",
-}
-
-MAP_SEXO = {"M": "Masculino", "F": "Femenino", "I": "Indeterminado"}
-MAP_SEXO_AGRESOR = {"M": "Masculino", "F": "Femenino", "I": "Intersexual"}
-
-MAP_IDEN_GENERO = {1: "Hombre", 2: "Mujer", 3: "Hombre trans", 4: "Mujer trans", 5: "Otra"}
-MAP_ORIENT_SEX = {1: "Heterosexual", 2: "Gay/Lesbiana", 3: "Bisexual", 4: "Otra"}
-MAP_ETNIA = {1: "Indígena", 2: "Rom/Gitano", 3: "Raizal", 4: "Palenquero",
-             5: "Negro/Mulato/Afrocolombiano", 6: "Otro"}
-
-MAP_ACTIVIDAD = {
-    13: "Líder cívico", 24: "Estudiante", 26: "Otro",
-    28: "Trabajador doméstico", 29: "Persona en situación de prostitución",
-    30: "Campesino/a", 31: "Persona dedicada al hogar",
-    32: "Cuidador", 33: "Ninguna",
-}
-
-# Mapeo de EAPB del archivo a la lista oficial del aplicativo
+# Mapeo del archivo histórico SIVIGILA al esquema reducido
 MAP_EAPB = {
     "ASMET SALUD": "ASMET SALUD",
     "ASOCIACION INDIGENA DEL CAUCA": "ASOCIACIÓN INDÍGENA DEL CAUCA EPSI",
@@ -2022,9 +1489,10 @@ MAP_EAPB = {
     "SURA": "SURA",
 }
 
+MAP_SEXO = {"M": "Masculino", "F": "Femenino", "I": "Indeterminado"}
+
 
 def _to_int_safe(val):
-    """Convierte a int tolerante a NaN, '' y strings."""
     try:
         if pd.isna(val):
             return None
@@ -2034,7 +1502,6 @@ def _to_int_safe(val):
 
 
 def _fmt_fecha(val):
-    """Formatea fecha YYYY-MM-DD o vacío."""
     if pd.isna(val) or str(val).strip() in ("", "None", "NaT"):
         return ""
     try:
@@ -2044,7 +1511,6 @@ def _fmt_fecha(val):
 
 
 def _si_no(val):
-    """Convierte 1/2 a SI/NO."""
     v = _to_int_safe(val)
     if v == 1:
         return "SI"
@@ -2054,138 +1520,62 @@ def _si_no(val):
 
 
 def transformar_base_875(df):
-    """Transforma el DataFrame del archivo histórico al esquema COLUMNAS_DATOS.
+    """Transforma la base histórica al esquema reducido (39 columnas).
 
-    Filtra previamente los registros de violencia sexual
-    (descarta filas donde 'naturaleza' no esté en {1, 2, 3}).
+    Filtra automáticamente los registros de violencia sexual.
     """
-    # Filtrar violencia sexual: solo conservar naturaleza 1/2/3
     df = df.copy()
     df["_nat_int"] = df["naturaleza"].apply(_to_int_safe)
     n_inicial = len(df)
-    df_no_sexual = df[df["_nat_int"].isin([1, 2, 3])].copy()
-    n_descartados = n_inicial - len(df_no_sexual)
+    df_no_sex = df[df["_nat_int"].isin([1, 2, 3])].copy()
+    n_descartados = n_inicial - len(df_no_sex)
 
     registros = []
-    for _, row in df_no_sexual.iterrows():
-        # EPS
+    for _, row in df_no_sex.iterrows():
         eps_raw = str(row.get("EAPB", "")).strip()
         eps_final = MAP_EAPB.get(eps_raw, "OTRA (especificar)")
 
-        # Edad
         edad = _to_int_safe(row.get("edad_")) or 0
 
-        # Nombres / apellidos (componer desde 4 columnas)
-        pri_nom = str(row.get("pri_nom_", "")).strip().upper()
-        seg_nom = str(row.get("seg_nom_", "")).strip().upper()
-        pri_ape = str(row.get("pri_ape_", "")).strip().upper()
-        seg_ape = str(row.get("seg_ape_", "")).strip().upper()
-        nombres = (pri_nom + " " + seg_nom).replace("NAN", "").strip()
-        apellidos = (pri_ape + " " + seg_ape).replace("NAN", "").strip()
+        pri_n = str(row.get("pri_nom_", "")).strip().upper()
+        seg_n = str(row.get("seg_nom_", "")).strip().upper()
+        pri_a = str(row.get("pri_ape_", "")).strip().upper()
+        seg_a = str(row.get("seg_ape_", "")).strip().upper()
+        nombres = (pri_n + " " + seg_n).replace("NAN", "").strip()
+        apellidos = (pri_a + " " + seg_a).replace("NAN", "").strip()
 
-        # Documento (limpiar .0 que pandas agrega a numéricos)
         num_doc = str(row.get("num_ide_", "")).strip()
         if num_doc.endswith(".0"):
             num_doc = num_doc[:-2]
 
-        # Modalidad
-        modalidad = MAP_NATURALEZA_MODALIDAD.get(row["_nat_int"], "FÍSICA")
-
-        # Mecanismo (NEGLIGENCIA → NO APLICA)
-        mec_int = _to_int_safe(row.get("mecanismo_utilizado_para_la_agresión"))
-        if modalidad == "NEGLIGENCIA Y ABANDONO":
-            mecanismo = "NO APLICA"
-        else:
-            mecanismo = MAP_MECANISMO.get(mec_int, "NO APLICA") if mec_int else "NO APLICA"
-
-        # Gestante
-        gp_gest = _to_int_safe(row.get("gp_gestan"))
-        gestante = "SI" if gp_gest == 1 else ("NO" if gp_gest == 2 else "NO APLICA")
-        sem_gest = _to_int_safe(row.get("sem_ges_")) or 0
-
-        # Discapacidad
-        gp_disc = _to_int_safe(row.get("gp_discapa"))
-        discapacidad = "SI" if gp_disc == 1 else "NO"
-
-        # Grupos poblacionales
-        gp_lista = []
-        if _to_int_safe(row.get("gp_desplaz")) == 1:
-            gp_lista.append("Desplazado")
-        if _to_int_safe(row.get("gp_migrant")) == 1:
-            gp_lista.append("Migrante")
-        if _to_int_safe(row.get("gp_carcela")) == 1:
-            gp_lista.append("PPL (Privado de la libertad)")
-        if _to_int_safe(row.get("gp_pobicbf")) == 1:
-            gp_lista.append("ICBF")
-        if _to_int_safe(row.get("gp_mad_com")) == 1:
-            gp_lista.append("Madre comunitaria")
-        if _to_int_safe(row.get("gp_desmovi")) == 1:
-            gp_lista.append("Desmovilizado")
-        if _to_int_safe(row.get("gp_vic_vio")) == 1:
-            gp_lista.append("Víctima del conflicto armado")
-
-        # Reporte autoridades
         reporte = "SI" if _to_int_safe(row.get("inf_aut")) == 1 else "NO"
 
         registro = {
             "id": generar_id(),
             "fecha_digitacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "funcionario_reporta": "CARGA HISTÓRICA",
+            "funcionario_reporta": "CARGA MASIVA",
             "eps_reporta": eps_final,
             "semana_epidemiologica": str(_to_int_safe(row.get("semana")) or 0),
+            "antec_violencia": _si_no(row.get("antec")),
             "nombres": nombres,
             "apellidos": apellidos,
             "tipo_documento": str(row.get("tip_ide_", "CC")).strip().upper(),
             "numero_documento": num_doc,
             "edad": str(edad),
-            "curso_vida": calcular_curso_vida(edad),
             "sexo": MAP_SEXO.get(str(row.get("sexo_", "")).strip().upper(), "Indeterminado"),
-            "identidad_genero": MAP_IDEN_GENERO.get(_to_int_safe(row.get("iden_gener")), "Sin información"),
-            "orientacion_sexual": MAP_ORIENT_SEX.get(_to_int_safe(row.get("orient_sex")), "Sin información"),
-            "pertenencia_etnica": MAP_ETNIA.get(_to_int_safe(row.get("per_etn_")), "Ninguno"),
+            "curso_vida": calcular_curso_vida(edad),
             "municipio_residencia": str(row.get("nmun_resi", "")).strip().upper(),
-            "gestante": gestante,
-            "semanas_gestacion": str(sem_gest),
-            "discapacidad": discapacidad,
-            "grupos_poblacionales": ", ".join(gp_lista),
-            "modalidad_violencia": modalidad,
-            "fecha_hecho": _fmt_fecha(row.get("fec_hecho")),
-            "hora_hecho": str(row.get("hora_hecho", "")).strip() if not pd.isna(row.get("hora_hecho")) else "",
-            "municipio_hecho": str(row.get("nmun_proce", "")).strip().upper(),
-            "mecanismo_agresion": mecanismo,
-            "escenario": MAP_ESCENARIO.get(_to_int_safe(row.get("escenario")), "Otro"),
-            "ambito": MAP_AMBITO.get(_to_int_safe(row.get("ambito_lug")), "Hogar"),
-            "consumo_spa_victima": _si_no(row.get("consum_spa")),
-            "consumo_alcohol_victima": _si_no(row.get("presencia_de_alcohol_u_otra_sustancia_en_la_víctima")),
-            "jefatura_hogar": "SI" if _to_int_safe(row.get("persona_con_jefatura_de_hogar")) == 1 else "NO",
-            "actividad_victima": MAP_ACTIVIDAD.get(_to_int_safe(row.get("actividad")), "Ninguna"),
-            "antec_violencia": _si_no(row.get("antec")),
-            "conflicto_armado": "SI" if _to_int_safe(row.get("zona_conf")) == 1 else "NO",
-            "sexo_agresor": MAP_SEXO_AGRESOR.get(str(row.get("sexo_agre", "")).strip().upper(), "Sin dato"),
-            "edad_agresor": str(_to_int_safe(row.get("edad_agre")) or 0),
-            "parentesco_agresor": MAP_PARENTESCO.get(_to_int_safe(row.get("r_fam_vic")), "Ninguno"),
-            "convive_agresor": "SI" if _to_int_safe(row.get("conv_agre")) == 1 else "NO",
-            "agresor_no_familiar": MAP_REL_NO_FAMILIAR.get(_to_int_safe(row.get("r_nofiliar")), "No aplica"),
-            "fecha_notificacion_sivigila": _fmt_fecha(row.get("fec_not")),
-            "fecha_consulta": _fmt_fecha(row.get("fec_con_")),
-            "fecha_inicio_sintomas": _fmt_fecha(row.get("ini_sin_")),
+            "fecha_evento": _fmt_fecha(row.get("fec_hecho")),
             "upgd_atencion": str(row.get("nom_upgd", "")).strip(),
             "municipio_atencion": str(row.get("nmun_notif", "")).strip().upper(),
             "fecha_atencion": _fmt_fecha(row.get("fec_con_")),
-            "hospitalizado": "SI" if _to_int_safe(row.get("pac_hos_")) == 1 else "NO",
-            "fecha_hospitalizacion": _fmt_fecha(row.get("fec_hos_")),
-            "fecha_alta": "",
-            "condicion_final": "VIVO" if _to_int_safe(row.get("con_fin_")) == 1 else ("MUERTO" if _to_int_safe(row.get("con_fin_")) == 2 else "NO SABE"),
-            "fecha_defuncion": _fmt_fecha(row.get("fec_def_")),
             "atencion_salud_mental": "SI" if _to_int_safe(row.get("ac_mental")) == 1 else "NO",
             "fecha_salud_mental": "",
             "valoracion_psicologia": "NO",
             "fecha_psicologia": "",
             "valoracion_psiquiatria": "NO",
             "fecha_psiquiatria": "",
-            "atencion_medicina_general": "NO",
             "atencion_trabajo_social": "NO",
-            "atencion_salud_ocupacional": "NO",
             "remision_proteccion": "SI" if _to_int_safe(row.get("remit_prot")) == 1 else "NO",
             "reporte_autoridades": reporte,
             "seguimiento_1": "",
@@ -2197,8 +1587,8 @@ def transformar_base_875(df):
             "abandono_proceso": "SIN INFORMACIÓN",
             "reincidencia_nuevo_evento": "SIN INFORMACIÓN",
             "estado_caso": "ACTIVO",
-            "observaciones": f"Carga histórica - {datetime.now().strftime('%Y-%m-%d')}",
-            "ultima_modificacion_por": st.session_state.get("nombre_completo", "CARGA HISTÓRICA"),
+            "observaciones": f"Carga masiva - {datetime.now().strftime('%Y-%m-%d')}",
+            "ultima_modificacion_por": st.session_state.get("nombre_completo", "CARGA MASIVA"),
             "ultima_modificacion_fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         registros.append(registro)
@@ -2207,24 +1597,24 @@ def transformar_base_875(df):
     return pd.DataFrame(registros), n_descartados
 
 
-def modulo_carga_historica(spreadsheet):
-    """Módulo para cargar la base histórica del Evento 875."""
+def modulo_carga_masiva(spreadsheet):
+    """Importación masiva de la base histórica del Evento 875."""
     st.markdown("""
     <div class="main-header">
-        <h1>📂 Cargar Base Histórica</h1>
+        <h1>📂 Carga Masiva</h1>
         <p>Importación masiva de registros del Evento 875 (excluye violencia sexual)</p>
     </div>
     """, unsafe_allow_html=True)
 
     if st.session_state.get("rol") != "SECRETARÍA":
-        st.error("⛔ Solo el rol SECRETARÍA puede cargar bases históricas.")
+        st.error("⛔ Solo el rol SECRETARÍA puede realizar carga masiva.")
         return
 
     st.info("ℹ️ El sistema descarta automáticamente los registros de violencia sexual "
             "(solo carga modalidades FÍSICA, PSICOLÓGICA y NEGLIGENCIA Y ABANDONO).")
 
     archivo = st.file_uploader("Seleccione el archivo Excel histórico (.xlsx)",
-                               type=["xlsx", "xls"], key="carga_hist_file")
+                               type=["xlsx", "xls"], key="carga_masiva_file")
     if archivo is None:
         return
 
@@ -2240,89 +1630,79 @@ def modulo_carga_historica(spreadsheet):
         return
 
     with st.spinner("Transformando datos al esquema del aplicativo..."):
-        df_transformado, n_sexuales = transformar_base_875(df_raw)
+        df_t, n_sex = transformar_base_875(df_raw)
 
-    # Detectar duplicados
     with st.spinner("Verificando duplicados contra la base existente..."):
-        df_existente = cargar_datos(spreadsheet, forzar=True)
+        df_exist = cargar_datos(spreadsheet, forzar=True)
 
-    if not df_existente.empty:
-        df_existente["_llave"] = (
-            df_existente["numero_documento"].astype(str).str.strip() + "_" +
-            df_existente["fecha_hecho"].astype(str).str.strip()
-        )
-        df_transformado["_llave"] = (
-            df_transformado["numero_documento"].astype(str).str.strip() + "_" +
-            df_transformado["fecha_hecho"].astype(str).str.strip()
-        )
-        llaves_existentes = set(df_existente["_llave"].tolist())
-        mascara_nuevos = ~df_transformado["_llave"].isin(llaves_existentes)
-        n_duplicados = (~mascara_nuevos).sum()
-        df_nuevos = df_transformado[mascara_nuevos].drop(columns=["_llave"])
+    if not df_exist.empty:
+        df_exist["_llave"] = (df_exist["numero_documento"].astype(str).str.strip() + "_" +
+                              df_exist["fecha_evento"].astype(str).str.strip())
+        df_t["_llave"] = (df_t["numero_documento"].astype(str).str.strip() + "_" +
+                          df_t["fecha_evento"].astype(str).str.strip())
+        llaves = set(df_exist["_llave"].tolist())
+        mask = ~df_t["_llave"].isin(llaves)
+        n_dup = (~mask).sum()
+        df_n = df_t[mask].drop(columns=["_llave"])
     else:
-        n_duplicados = 0
-        df_nuevos = df_transformado.drop(columns=["_llave"], errors="ignore")
+        n_dup = 0
+        df_n = df_t.drop(columns=["_llave"], errors="ignore")
 
-    # Resumen
     st.markdown("---")
     st.markdown("### 📊 Resumen")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total en archivo", len(df_raw))
-    c2.metric("Sexuales descartados", n_sexuales)
-    c3.metric("Duplicados omitidos", int(n_duplicados))
-    c4.metric("Nuevos a cargar", len(df_nuevos))
+    c2.metric("Sexuales descartados", n_sex)
+    c3.metric("Duplicados omitidos", int(n_dup))
+    c4.metric("Nuevos a cargar", len(df_n))
 
-    if df_nuevos.empty:
+    if df_n.empty:
         st.warning("⚠️ No hay registros nuevos para insertar.")
         return
 
-    with st.expander("👁️ Vista previa de los registros a cargar"):
-        cols_prev = ["nombres", "apellidos", "numero_documento", "edad", "sexo",
-                     "modalidad_violencia", "municipio_hecho", "eps_reporta",
-                     "fecha_hecho", "fecha_notificacion_sivigila"]
-        cols_disp = [c for c in cols_prev if c in df_nuevos.columns]
-        st.dataframe(df_nuevos[cols_disp].head(50), use_container_width=True, hide_index=True)
-        if len(df_nuevos) > 50:
-            st.caption(f"Mostrando 50 de {len(df_nuevos)} registros.")
+    with st.expander("👁️ Vista previa"):
+        cols_p = ["nombres", "apellidos", "numero_documento", "edad", "sexo",
+                  "municipio_residencia", "eps_reporta", "fecha_evento"]
+        cols_pd = [c for c in cols_p if c in df_n.columns]
+        st.dataframe(df_n[cols_pd].head(50), use_container_width=True, hide_index=True)
+        if len(df_n) > 50:
+            st.caption(f"Mostrando 50 de {len(df_n)} registros.")
 
     st.markdown("---")
     st.warning("⚠️ Esta acción insertará los registros en Google Sheets. No se puede deshacer desde la app.")
-    confirmar = st.button(f"✅ Confirmar e insertar {len(df_nuevos)} registros",
-                          type="primary", use_container_width=True)
-
-    if confirmar:
+    if st.button(f"✅ Confirmar e insertar {len(df_n)} registros",
+                 type="primary", use_container_width=True):
         hoja = obtener_hoja_datos(spreadsheet)
         progreso = st.progress(0)
         estado = st.empty()
 
-        todas_filas = [[str(r.get(col, "")) for col in COLUMNAS_DATOS]
-                       for _, r in df_nuevos.iterrows()]
+        todas = [[str(r.get(col, "")) for col in COLUMNAS_DATOS]
+                 for _, r in df_n.iterrows()]
 
-        TAMANO_LOTE = 50
-        insertados = 0
-        errores = 0
-        total_lotes = (len(todas_filas) - 1) // TAMANO_LOTE + 1
+        TAM = 50
+        ins = 0
+        err = 0
+        total_lotes = (len(todas) - 1) // TAM + 1
 
-        for i in range(0, len(todas_filas), TAMANO_LOTE):
-            lote = todas_filas[i:i + TAMANO_LOTE]
-            num_lote = i // TAMANO_LOTE + 1
-            estado.text(f"Insertando lote {num_lote} de {total_lotes} "
-                        f"({len(lote)} registros)...")
+        for i in range(0, len(todas), TAM):
+            lote = todas[i:i + TAM]
+            nl = i // TAM + 1
+            estado.text(f"Insertando lote {nl} de {total_lotes} ({len(lote)} registros)...")
             try:
                 hoja.append_rows(lote, value_input_option="USER_ENTERED", table_range="A1")
-                insertados += len(lote)
+                ins += len(lote)
             except Exception as e:
-                st.warning(f"Error en lote {num_lote}: {e}. Reintentando en 30 s...")
+                st.warning(f"Error en lote {nl}: {e}. Reintentando en 30 s...")
                 time.sleep(30)
                 try:
                     hoja.append_rows(lote, value_input_option="USER_ENTERED", table_range="A1")
-                    insertados += len(lote)
+                    ins += len(lote)
                 except Exception as e2:
-                    errores += len(lote)
-                    st.error(f"Lote {num_lote} falló definitivamente: {e2}")
+                    err += len(lote)
+                    st.error(f"Lote {nl} falló: {e2}")
 
-            progreso.progress(min((i + len(lote)) / len(todas_filas), 1.0))
-            time.sleep(2)  # respeta cuota gspread
+            progreso.progress(min((i + len(lote)) / len(todas), 1.0))
+            time.sleep(2)
 
         progreso.empty()
         estado.empty()
@@ -2330,11 +1710,11 @@ def modulo_carga_historica(spreadsheet):
         if "_datos_cache_time" in st.session_state:
             st.session_state["_datos_cache_time"] = 0
 
-        if errores == 0:
-            st.success(f"🎉 Carga completada: **{insertados}** registros insertados.")
+        if err == 0:
+            st.success(f"🎉 Carga completada: **{ins}** registros insertados.")
             st.balloons()
         else:
-            st.warning(f"⚠️ Insertados {insertados}, fallaron {errores}.")
+            st.warning(f"⚠️ Insertados {ins}, fallaron {err}.")
 
 
 # ============================================================
@@ -2342,7 +1722,6 @@ def modulo_carga_historica(spreadsheet):
 # ============================================================
 
 def main():
-    """Función principal."""
     if not st.session_state.get("autenticado", False):
         mostrar_login()
         return
@@ -2362,8 +1741,8 @@ def main():
         modulo_edicion(spreadsheet)
     elif pagina == "📥 Exportar Datos":
         modulo_exportacion(spreadsheet)
-    elif pagina == "📂 Cargar Base Histórica":
-        modulo_carga_historica(spreadsheet)
+    elif pagina == "📂 Carga Masiva":
+        modulo_carga_masiva(spreadsheet)
     elif pagina == "⚙️ Gestionar Usuarios":
         modulo_gestion_usuarios(spreadsheet)
 
