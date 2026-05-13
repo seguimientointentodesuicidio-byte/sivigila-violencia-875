@@ -1,5 +1,5 @@
 """
-SIVIGILA - Vigilancia Violencia de Género e Intrafamiliar | Valle del Cauca
+SIVIGILA - Vigilancia Violencia de Género e Intrafamiliar - NO SEXUAL | Valle del Cauca
 Evento 875 - SIN componente sexual (solo Física, Psicológica, Negligencia y Abandono)
 Secretaría Departamental de Salud del Valle del Cauca
 
@@ -404,7 +404,7 @@ def mostrar_login():
         st.markdown(f"""
         <div style="text-align:center; margin-bottom:1.5rem;">
             <h3 style="color:{COLOR_AZUL_OSCURO}; margin-bottom:0.2rem;">
-                SIVIGILA - Violencia de Género e Intrafamiliar
+                SIVIGILA - Violencia de Género e Intrafamiliar - NO SEXUAL
             </h3>
             <p style="color:#888; font-size:0.85rem;">Evento 875 | Valle del Cauca</p>
         </div>
@@ -497,7 +497,7 @@ def modulo_formulario(spreadsheet):
     """Formulario de registro de nuevos casos (esquema reducido)."""
     st.markdown("""
     <div class="main-header">
-        <h1>📝 Registro de Nuevo Caso - Violencia de Género e Intrafamiliar</h1>
+        <h1>📝 Registro de Nuevo Caso - Violencia de Género e Intrafamiliar - NO SEXUAL</h1>
         <p>Evento 875 SIVIGILA | Seguimiento de casos</p>
     </div>
     """, unsafe_allow_html=True)
@@ -716,7 +716,7 @@ def modulo_formulario(spreadsheet):
 def modulo_dashboard(spreadsheet):
     st.markdown("""
     <div class="main-header">
-        <h1>📊 Tablero de Control - Violencia de Género e Intrafamiliar</h1>
+        <h1>📊 Tablero de Control - Violencia de Género e Intrafamiliar - NO SEXUAL</h1>
         <p>Evento 875 SIVIGILA | Secretaría Departamental de Salud | Valle del Cauca</p>
     </div>
     """, unsafe_allow_html=True)
