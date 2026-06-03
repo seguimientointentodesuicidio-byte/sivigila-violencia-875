@@ -1090,51 +1090,65 @@ def modulo_edicion(spreadsheet):
         "Buscar por documento, nombre o apellido",
         value=busq_doc_default,
         placeholder="Escriba el documento o el nombre…",
+        key="edit_busqueda",
         help="Si escribe números se busca por documento; si escribe letras, por nombre o apellido. "
              "En ambos casos la coincidencia es por el inicio.")
 
-    df_r = df.copy()
-    if busqueda.strip():
+    # Si cambia el texto de búsqueda, se descarta la selección previa
+    if st.session_state.get("_edit_busqueda_prev") != busqueda:
+        st.session_state["_edit_id_sel"] = None
+        st.session_state["_edit_busqueda_prev"] = busqueda
+
+    id_sel = st.session_state.get("_edit_id_sel")
+
+    # Mostrar coincidencias como botones SOLO si aún no se eligió un registro
+    if not id_sel:
+        if not busqueda.strip():
+            st.info("✍️ Escriba un documento o nombre para ver las coincidencias.")
+            return
+
         b = busqueda.strip()
-        b_solo_digitos = "".join(c for c in b if c.isalnum())
+        df_r = df.copy()
         if b.replace(" ", "").isdigit():
-            # Documento: coincide por el INICIO (empieza por)
-            df_r = df_r[df_r["numero_documento"].apply(_norm_doc).str.startswith(b_solo_digitos)]
+            b_dig = "".join(c for c in b if c.isalnum())
+            df_r = df_r[df_r["numero_documento"].apply(_norm_doc).str.startswith(b_dig)]
         else:
-            # Nombre o apellido: coincide por el inicio de cualquiera de los dos
             bu = b.upper()
             df_r = df_r[
                 df_r["nombres"].astype(str).str.upper().str.startswith(bu) |
                 df_r["apellidos"].astype(str).str.upper().str.startswith(bu)
             ]
 
-    if df_r.empty:
-        st.info("✍️ Escriba un documento o nombre para ver las coincidencias.")
+        if df_r.empty:
+            st.warning("No se encontraron registros con ese criterio.")
+            return
+
+        st.caption(f"**{len(df_r)} coincidencia(s).** Haga clic en el registro que desea editar:")
+        for _, r in df_r.head(30).iterrows():
+            nom = f"{r.get('nombres', '')} {r.get('apellidos', '')}".strip()
+            doc = str(r.get("numero_documento", "")).strip()
+            edad = str(r.get("edad", "")).strip()
+            mun = str(r.get("municipio_residencia", "")).strip()
+            etiqueta = f"👤 {nom}  —  Doc: {doc}  —  {edad} años  —  {mun}"
+            if st.button(etiqueta, key=f"sel_{r['id']}", use_container_width=True):
+                st.session_state["_edit_id_sel"] = r["id"]
+                st.rerun()
+        if len(df_r) > 30:
+            st.caption(f"Mostrando 30 de {len(df_r)}. Escriba más caracteres para acotar.")
         return
 
-    ids = df_r["id"].tolist()
-    st.caption(f"**{len(df_r)} coincidencia(s).** Seleccione el registro a editar:")
+    # Ya hay un registro seleccionado
+    df_sel = df[df["id"] == id_sel]
+    if df_sel.empty:
+        st.session_state["_edit_id_sel"] = None
+        st.rerun()
+    registro = df_sel.iloc[0].to_dict()
 
-    # Etiqueta legible: NOMBRE APELLIDO — documento — edad — municipio (sin el ID)
-    etiquetas = {}
-    for _, r in df_r.iterrows():
-        nom = f"{r.get('nombres', '')} {r.get('apellidos', '')}".strip()
-        doc = str(r.get("numero_documento", "")).strip()
-        edad = str(r.get("edad", "")).strip()
-        mun = str(r.get("municipio_residencia", "")).strip()
-        etiquetas[r["id"]] = f"{nom} — Doc: {doc} — {edad} años — {mun}"
-
-    id_sel = st.selectbox(
-        "Registro:",
-        options=ids,
-        index=None,
-        placeholder="— Seleccione el registro —",
-        format_func=lambda x: etiquetas.get(x, x),
-        label_visibility="collapsed")
+    if st.button("⬅️ Buscar otro registro"):
+        st.session_state["_edit_id_sel"] = None
+        st.rerun()
 
     if id_sel:
-        registro = df_r[df_r["id"] == id_sel].iloc[0].to_dict()
-
         st.markdown(f"#### Editando: **{registro.get('nombres', '')} {registro.get('apellidos', '')}** "
                     f"(Doc: {registro.get('numero_documento', '')})")
 
