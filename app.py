@@ -324,11 +324,11 @@ def actualizar_registro(spreadsheet, id_registro, datos_dict, usuario_modifica):
 
 
 def buscar_por_documento(df, numero_doc):
-    """Busca pacientes por número de documento."""
+    """Busca pacientes por número de documento (comparación normalizada)."""
     if df.empty:
         return pd.DataFrame()
-    numero_doc = str(numero_doc).strip()
-    return df[df["numero_documento"].astype(str).str.strip() == numero_doc]
+    objetivo = _norm_doc(numero_doc)
+    return df[df["numero_documento"].apply(_norm_doc) == objetivo]
 
 
 # ============================================================
@@ -561,10 +561,11 @@ def modulo_formulario(spreadsheet):
 
         # ---- Atención Integral en Salud ----
         st.markdown("#### 🧠 Atención Integral en Salud")
+        sino = ["", "NO", "SI"]
         sino_na = ["", "NO", "SI", "NO APLICA"]
         col1, col2 = st.columns(2)
         with col1:
-            atencion_sm = st.selectbox("Atención por Salud Mental", options=sino_na)
+            atencion_sm = st.selectbox("Atención por Salud Mental", options=sino)
             fecha_sm = st.date_input("Fecha atención Salud Mental", value=None)
         with col2:
             remision_proteccion = st.selectbox("Remisión a protección (ICBF, Comisaría)", options=sino_na)
@@ -713,6 +714,28 @@ def modulo_formulario(spreadsheet):
 # MÓDULO 2: TABLERO DE CONTROL
 # ============================================================
 
+def _hover_pct(fig, eje="y"):
+    """Agrega al tooltip de un gráfico de barras el porcentaje sobre el total
+    de la serie, además del valor absoluto. 'eje' indica dónde está el conteo:
+    'y' para barras verticales, 'x' para barras horizontales."""
+    for tr in fig.data:
+        valores = tr.y if eje == "y" else tr.x
+        try:
+            total = sum(v for v in valores if v is not None)
+        except TypeError:
+            total = 0
+        pct = [(v / total * 100 if total else 0) for v in valores]
+        tr.customdata = [[p] for p in pct]
+        etiquetas = tr.x if eje == "y" else tr.y
+        nombre = tr.name if tr.name else "Casos"
+        tr.hovertemplate = (
+            "<b>%{" + ("x" if eje == "y" else "y") + "}</b><br>"
+            + nombre + ": %{" + eje + "} casos<br>"
+            "Porcentaje: %{customdata[0]:.1f}%<extra></extra>"
+        )
+    return fig
+
+
 def modulo_dashboard(spreadsheet):
     st.markdown("""
     <div class="main-header">
@@ -836,6 +859,7 @@ def modulo_dashboard(spreadsheet):
                          title="Casos por Municipio de Residencia",
                          color="Casos", color_continuous_scale="Reds", text="Casos")
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="x")
             fig.update_layout(height=max(400, len(df_mun) * 28),
                               showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
@@ -847,6 +871,7 @@ def modulo_dashboard(spreadsheet):
                          title="Casos por EPS",
                          color="Casos", color_continuous_scale="Blues", text="Casos")
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="y")
             fig.update_layout(xaxis_tickangle=-45, height=400,
                               showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
@@ -885,6 +910,7 @@ def modulo_dashboard(spreadsheet):
                          "SIN CONTACTO": "#9E9E9E", "REMITIDO A OTRA EPS": "#FF9800"
                      })
         fig.update_traces(textposition="outside")
+        _hover_pct(fig, eje="y")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -909,6 +935,7 @@ def modulo_dashboard(spreadsheet):
                          barmode="group", text="Casos",
                          category_orders={"curso_vida": CURSOS_VIDA})
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="y")
             fig.update_layout(xaxis_tickangle=-30)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -922,6 +949,7 @@ def modulo_dashboard(spreadsheet):
                          title="Atención por Salud Mental",
                          color="Casos", color_continuous_scale="Blues", text="Casos")
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="y")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
         with col2:
@@ -931,6 +959,7 @@ def modulo_dashboard(spreadsheet):
                          title="Remisión a protección (ICBF, Comisaría)",
                          color="Casos", color_continuous_scale="Oranges", text="Casos")
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="y")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -942,6 +971,7 @@ def modulo_dashboard(spreadsheet):
                          title="Reporte a autoridades (Fiscalía/Policía)",
                          color="Casos", color_continuous_scale="Reds", text="Casos")
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="y")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
         with col2:
@@ -951,6 +981,7 @@ def modulo_dashboard(spreadsheet):
                          title="¿Asiste a los servicios?",
                          color="Casos", color_continuous_scale="Blues", text="Casos")
             fig.update_traces(textposition="outside")
+            _hover_pct(fig, eje="y")
             fig.update_layout(showlegend=False, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -960,6 +991,7 @@ def modulo_dashboard(spreadsheet):
                      title="¿Abandonó el proceso?",
                      color="Casos", color_continuous_scale="Reds", text="Casos")
         fig.update_traces(textposition="outside")
+        _hover_pct(fig, eje="y")
         fig.update_layout(showlegend=False, coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -1144,12 +1176,13 @@ def modulo_edicion(spreadsheet):
 
             # Atención en Salud
             st.markdown("##### 🧠 Atención Integral en Salud")
+            sino = ["NO", "SI"]
             sino_na = ["NO", "SI", "NO APLICA"]
             col1, col2 = st.columns(2)
             with col1:
-                asm_e = st.selectbox("Atención Salud Mental", options=sino_na,
-                                     index=sino_na.index(registro.get("atencion_salud_mental", "NO"))
-                                     if registro.get("atencion_salud_mental", "") in sino_na else 0)
+                asm_e = st.selectbox("Atención Salud Mental", options=sino,
+                                     index=sino.index(registro.get("atencion_salud_mental", "NO"))
+                                     if registro.get("atencion_salud_mental", "") in sino else 0)
                 fsm_e = st.date_input("Fecha Salud Mental",
                                       value=parse_date_safe(registro.get("fecha_salud_mental")))
             with col2:
@@ -1455,6 +1488,33 @@ def _si_no(val):
     return "SIN INFORMACIÓN"
 
 
+def _norm_doc(val):
+    """Normaliza un número de documento: sin espacios, sin '.0', solo dígitos/letras."""
+    s = str(val).strip().upper()
+    if s.endswith(".0"):
+        s = s[:-2]
+    return "".join(c for c in s if c.isalnum())
+
+
+def _norm_fecha(val):
+    """Normaliza cualquier fecha a 'YYYY-MM-DD'; cadena vacía si no es válida.
+
+    Respeta el formato ISO (YYYY-MM-DD) y usa dayfirst solo para formatos tipo
+    dd/mm/aaaa, evitando invertir día y mes.
+    """
+    if pd.isna(val) or str(val).strip() in ("", "None", "NaT"):
+        return ""
+    s = str(val).strip()
+    # Si ya viene en ISO (2026-05-10), no aplicar dayfirst
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        f = pd.to_datetime(s[:10], format="%Y-%m-%d", errors="coerce")
+    else:
+        f = pd.to_datetime(s, dayfirst=True, errors="coerce")
+        if pd.isna(f):
+            f = pd.to_datetime(s, errors="coerce")
+    return "" if pd.isna(f) else f.strftime("%Y-%m-%d")
+
+
 def transformar_base_875(df):
     """Transforma la base histórica al esquema reducido (39 columnas).
 
@@ -1567,25 +1627,64 @@ def modulo_carga_masiva(spreadsheet):
         df_exist = cargar_datos(spreadsheet, forzar=True)
 
     if not df_exist.empty:
-        df_exist["_llave"] = (df_exist["numero_documento"].astype(str).str.strip() + "_" +
-                              df_exist["fecha_evento"].astype(str).str.strip())
-        df_t["_llave"] = (df_t["numero_documento"].astype(str).str.strip() + "_" +
-                          df_t["fecha_evento"].astype(str).str.strip())
+        # Llaves normalizadas de la base existente
+        df_exist["_doc_n"] = df_exist["numero_documento"].apply(_norm_doc)
+        df_exist["_fec_n"] = df_exist["fecha_evento"].apply(_norm_fecha)
+        df_exist["_llave"] = df_exist["_doc_n"] + "_" + df_exist["_fec_n"]
+
+        df_t["_doc_n"] = df_t["numero_documento"].apply(_norm_doc)
+        df_t["_fec_n"] = df_t["fecha_evento"].apply(_norm_fecha)
+        df_t["_llave"] = df_t["_doc_n"] + "_" + df_t["_fec_n"]
+
         llaves = set(df_exist["_llave"].tolist())
-        mask = ~df_t["_llave"].isin(llaves)
-        n_dup = (~mask).sum()
-        df_n = df_t[mask].drop(columns=["_llave"])
+        docs_exist = set(df_exist["_doc_n"][df_exist["_doc_n"] != ""].tolist())
+
+        # Nivel 1: duplicado exacto (mismo documento + misma fecha) -> se omite
+        es_dup_exacto = df_t["_llave"].isin(llaves)
+        # Nivel 2: mismo documento pero fecha distinta o vacía -> posible duplicado (revisión)
+        es_posible_dup = (~es_dup_exacto) & (df_t["_doc_n"] != "") & (df_t["_doc_n"].isin(docs_exist))
+
+        n_dup = int(es_dup_exacto.sum())
+        n_posible = int(es_posible_dup.sum())
+
+        df_posibles = df_t[es_posible_dup].drop(
+            columns=["_llave", "_doc_n", "_fec_n"], errors="ignore")
+        df_n = df_t[~es_dup_exacto].drop(
+            columns=["_llave", "_doc_n", "_fec_n"], errors="ignore")
     else:
         n_dup = 0
-        df_n = df_t.drop(columns=["_llave"], errors="ignore")
+        n_posible = 0
+        df_posibles = pd.DataFrame()
+        df_n = df_t.drop(columns=["_llave", "_doc_n", "_fec_n"], errors="ignore")
 
     st.markdown("---")
     st.markdown("### 📊 Resumen")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Total en archivo", len(df_raw))
     c2.metric("Sexuales descartados", n_sex)
-    c3.metric("Duplicados omitidos", int(n_dup))
-    c4.metric("Nuevos a cargar", len(df_n))
+    c3.metric("Duplicados exactos omitidos", int(n_dup))
+    c4.metric("⚠️ Posibles duplicados", int(n_posible))
+    c5.metric("A cargar", len(df_n))
+
+    # --- Revisión de posibles duplicados (mismo documento, fecha distinta o vacía) ---
+    excluir_posibles = False
+    if n_posible > 0:
+        st.warning(f"⚠️ Hay **{n_posible}** registro(s) con un documento que YA existe en la base "
+                   f"pero con fecha del evento distinta o vacía. Pueden ser el mismo caso "
+                   f"(p. ej. uno digitado manualmente antes de llegar al SIVIGILA) o un evento nuevo.")
+        with st.expander(f"👁️ Revisar los {n_posible} posibles duplicados", expanded=True):
+            cols_pp = ["nombres", "apellidos", "numero_documento", "fecha_evento",
+                       "municipio_residencia", "eps_reporta"]
+            cols_ppd = [c for c in cols_pp if c in df_posibles.columns]
+            st.dataframe(df_posibles[cols_ppd], use_container_width=True, hide_index=True)
+        excluir_posibles = st.checkbox(
+            "🚫 NO cargar los posibles duplicados (recomendado si son el mismo caso)",
+            value=True)
+        if excluir_posibles:
+            docs_pos = set(df_posibles["numero_documento"].apply(_norm_doc).tolist())
+            df_n = df_n[~df_n["numero_documento"].apply(_norm_doc).isin(docs_pos)]
+
+    st.markdown(f"**Registros que se insertarán: {len(df_n)}**")
 
     if df_n.empty:
         st.warning("⚠️ No hay registros nuevos para insertar.")
