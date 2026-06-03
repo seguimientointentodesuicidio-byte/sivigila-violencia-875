@@ -1081,18 +1081,41 @@ def modulo_edicion(spreadsheet):
     if st.session_state.get("_ir_a_edicion"):
         st.session_state.pop("_ir_a_edicion", None)
 
+    if df.empty:
+        st.warning("No hay registros disponibles para editar.")
+        return
+
+    st.markdown("#### 🔍 Buscar Registro")
+    busqueda = st.text_input(
+        "Buscar por documento, nombre o apellido",
+        value=busq_doc_default,
+        placeholder="Escriba el documento o el nombre…",
+        help="Si escribe números se busca por documento; si escribe letras, por nombre o apellido. "
+             "En ambos casos la coincidencia es por el inicio.")
+
     df_r = df.copy()
-    if busq_doc_default:
-        df_r = df_r[df_r["numero_documento"].apply(_norm_doc) == _norm_doc(busq_doc_default)]
+    if busqueda.strip():
+        b = busqueda.strip()
+        b_solo_digitos = "".join(c for c in b if c.isalnum())
+        if b.replace(" ", "").isdigit():
+            # Documento: coincide por el INICIO (empieza por)
+            df_r = df_r[df_r["numero_documento"].apply(_norm_doc).str.startswith(b_solo_digitos)]
+        else:
+            # Nombre o apellido: coincide por el inicio de cualquiera de los dos
+            bu = b.upper()
+            df_r = df_r[
+                df_r["nombres"].astype(str).str.upper().str.startswith(bu) |
+                df_r["apellidos"].astype(str).str.upper().str.startswith(bu)
+            ]
 
     if df_r.empty:
-        st.warning("No se encontraron registros.")
+        st.info("✍️ Escriba un documento o nombre para ver las coincidencias.")
         return
 
     ids = df_r["id"].tolist()
+    st.caption(f"**{len(df_r)} coincidencia(s).** Seleccione el registro a editar:")
 
-    # Etiqueta legible para buscar: NOMBRE APELLIDO — documento — edad — municipio
-    # (sin el ID, porque sus dígitos contaminan la búsqueda por número de documento)
+    # Etiqueta legible: NOMBRE APELLIDO — documento — edad — municipio (sin el ID)
     etiquetas = {}
     for _, r in df_r.iterrows():
         nom = f"{r.get('nombres', '')} {r.get('apellidos', '')}".strip()
@@ -1101,14 +1124,13 @@ def modulo_edicion(spreadsheet):
         mun = str(r.get("municipio_residencia", "")).strip()
         etiquetas[r["id"]] = f"{nom} — Doc: {doc} — {edad} años — {mun}"
 
-    st.markdown("#### 🔍 Buscar Registro")
-    st.caption("💡 Escriba el documento, nombre o apellido para filtrar las coincidencias.")
     id_sel = st.selectbox(
-        "Seleccione el registro a editar:",
+        "Registro:",
         options=ids,
         index=None,
-        placeholder="Escriba el documento o el nombre…",
-        format_func=lambda x: etiquetas.get(x, x))
+        placeholder="— Seleccione el registro —",
+        format_func=lambda x: etiquetas.get(x, x),
+        label_visibility="collapsed")
 
     if id_sel:
         registro = df_r[df_r["id"] == id_sel].iloc[0].to_dict()
