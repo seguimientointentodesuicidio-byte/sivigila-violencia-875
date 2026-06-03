@@ -1124,12 +1124,13 @@ def modulo_edicion(spreadsheet):
         etiquetas[r["id"]] = f"{nom} — Doc: {doc} — {edad} años — {mun}"
 
     st.markdown("---")
-    st.caption("💡 Escriba el documento, nombre o apellido para filtrar; el número de documento "
-               "coincide de forma exacta.")
+    st.caption("💡 Escriba el documento, nombre o apellido para filtrar las coincidencias.")
     id_sel = st.selectbox(
         "Seleccione el registro a editar:",
-        options=[""] + ids,
-        format_func=lambda x: "— Escriba o seleccione un registro —" if x == "" else etiquetas.get(x, x))
+        options=ids,
+        index=None,
+        placeholder="Escriba el documento o el nombre…",
+        format_func=lambda x: etiquetas.get(x, x))
 
     if id_sel:
         registro = df_r[df_r["id"] == id_sel].iloc[0].to_dict()
