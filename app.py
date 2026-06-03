@@ -1113,9 +1113,19 @@ def modulo_edicion(spreadsheet):
     if not ids:
         return
 
+    # Etiqueta legible: NOMBRE APELLIDO — documento — ID (permite buscar escribiendo)
+    etiquetas = {}
+    for _, r in df_r.iterrows():
+        nom = f"{r.get('nombres', '')} {r.get('apellidos', '')}".strip()
+        doc = str(r.get("numero_documento", "")).strip()
+        etiquetas[r["id"]] = f"{nom} — {doc} — {r['id']}"
+
     st.markdown("---")
-    id_sel = st.selectbox("Seleccione el ID del registro a editar:", options=[""] + ids,
-                          format_func=lambda x: "— Seleccione un ID —" if x == "" else x)
+    st.caption("💡 Puede escribir el nombre, apellido o documento para filtrar las coincidencias.")
+    id_sel = st.selectbox(
+        "Seleccione el registro a editar:",
+        options=[""] + ids,
+        format_func=lambda x: "— Escriba o seleccione un registro —" if x == "" else etiquetas.get(x, x))
 
     if id_sel:
         registro = df_r[df_r["id"] == id_sel].iloc[0].to_dict()
