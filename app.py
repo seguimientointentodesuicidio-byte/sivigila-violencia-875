@@ -1076,45 +1076,23 @@ def modulo_edicion(spreadsheet):
         st.info("📭 No hay registros disponibles para editar.")
         return
 
-    # Si viene redirigido desde duplicado, prellenar búsqueda
+    # Si viene redirigido desde duplicado, dejar prefiltrada la base por documento
     busq_doc_default = st.session_state.pop("_edit_doc_busqueda", "")
     if st.session_state.get("_ir_a_edicion"):
         st.session_state.pop("_ir_a_edicion", None)
 
-    st.markdown("#### 🔍 Buscar Registro")
-    col1, col2 = st.columns([2, 2])
-    with col1:
-        busq_doc = st.text_input("Buscar por número de documento",
-                                 value=busq_doc_default, key="edit_busq_doc")
-    with col2:
-        busq_nombre = st.text_input("Buscar por nombre o apellido", key="edit_busq_nombre")
-
     df_r = df.copy()
-    if busq_doc:
-        df_r = df_r[df_r["numero_documento"].astype(str).str.contains(busq_doc, na=False)]
-    if busq_nombre:
-        bu = busq_nombre.upper()
-        df_r = df_r[
-            df_r["nombres"].astype(str).str.upper().str.contains(bu, na=False) |
-            df_r["apellidos"].astype(str).str.upper().str.contains(bu, na=False)
-        ]
+    if busq_doc_default:
+        df_r = df_r[df_r["numero_documento"].apply(_norm_doc) == _norm_doc(busq_doc_default)]
 
     if df_r.empty:
-        st.warning("No se encontraron registros con los criterios de búsqueda.")
+        st.warning("No se encontraron registros.")
         return
-
-    st.markdown(f"**{len(df_r)} registro(s) encontrado(s)**")
-    cols_t = ["id", "nombres", "apellidos", "numero_documento", "eps_reporta",
-              "edad", "municipio_residencia", "estado_caso", "fecha_evento"]
-    cols_d = [c for c in cols_t if c in df_r.columns]
-    st.dataframe(df_r[cols_d], use_container_width=True, hide_index=True)
 
     ids = df_r["id"].tolist()
-    if not ids:
-        return
 
-    # Etiqueta legible para buscar: NOMBRE APELLIDO — documento (sin el ID,
-    # porque sus dígitos contaminan la búsqueda por número de documento)
+    # Etiqueta legible para buscar: NOMBRE APELLIDO — documento — edad — municipio
+    # (sin el ID, porque sus dígitos contaminan la búsqueda por número de documento)
     etiquetas = {}
     for _, r in df_r.iterrows():
         nom = f"{r.get('nombres', '')} {r.get('apellidos', '')}".strip()
@@ -1123,7 +1101,7 @@ def modulo_edicion(spreadsheet):
         mun = str(r.get("municipio_residencia", "")).strip()
         etiquetas[r["id"]] = f"{nom} — Doc: {doc} — {edad} años — {mun}"
 
-    st.markdown("---")
+    st.markdown("#### 🔍 Buscar Registro")
     st.caption("💡 Escriba el documento, nombre o apellido para filtrar las coincidencias.")
     id_sel = st.selectbox(
         "Seleccione el registro a editar:",
