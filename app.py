@@ -1114,7 +1114,8 @@ def modulo_edicion(spreadsheet):
         return
 
     st.markdown("---")
-    id_sel = st.selectbox("Seleccione el ID del registro a editar:", options=ids)
+    id_sel = st.selectbox("Seleccione el ID del registro a editar:", options=[""] + ids,
+                          format_func=lambda x: "— Seleccione un ID —" if x == "" else x)
 
     if id_sel:
         registro = df_r[df_r["id"] == id_sel].iloc[0].to_dict()
