@@ -493,6 +493,20 @@ def mostrar_sidebar():
 # MÓDULO 1: REGISTRAR NUEVO CASO
 # ============================================================
 
+def aviso_poblaciones(contexto="general"):
+    """Muestra el recordatorio de que el seguimiento aplica solo a las
+    poblaciones objeto (alto riesgo / mal pronóstico)."""
+    texto = (
+        "🎯 **Este sistema hace seguimiento ÚNICAMENTE a las poblaciones de alto riesgo / "
+        "mal pronóstico:** gestantes · personas con discapacidad · personas de 70 años o más · "
+        "menores de 14 años · casos con hospitalización · agresión con arma de fuego, "
+        "cortopunzante o ácido/sustancias corrosivas · antecedente de violencia previa."
+    )
+    if contexto == "registrar":
+        texto += "  \nRegistre un caso solo si pertenece a alguna de estas poblaciones y aún no está en la base cargada."
+    st.warning(texto)
+
+
 def modulo_formulario(spreadsheet):
     """Formulario de registro de nuevos casos (esquema reducido)."""
     st.markdown("""
@@ -501,6 +515,8 @@ def modulo_formulario(spreadsheet):
         <p>Evento 875 SIVIGILA | Seguimiento de casos</p>
     </div>
     """, unsafe_allow_html=True)
+
+    aviso_poblaciones("registrar")
 
     with st.form("formulario_nuevo_caso", clear_on_submit=False):
         # ---- Identificación del Caso ----
@@ -743,6 +759,8 @@ def modulo_dashboard(spreadsheet):
         <p>Evento 875 SIVIGILA | Secretaría Departamental de Salud | Valle del Cauca</p>
     </div>
     """, unsafe_allow_html=True)
+
+    aviso_poblaciones("general")
 
     df = cargar_datos(spreadsheet, forzar=False)
     df = filtrar_por_rol(df)
@@ -1068,6 +1086,8 @@ def modulo_edicion(spreadsheet):
         <p>Busque un registro y actualice la información de seguimiento</p>
     </div>
     """, unsafe_allow_html=True)
+
+    aviso_poblaciones("general")
 
     df = cargar_datos(spreadsheet, forzar=True)
     df = filtrar_por_rol(df)
@@ -1545,6 +1565,45 @@ def _norm_fecha(val):
     return "" if pd.isna(f) else f.strftime("%Y-%m-%d")
 
 
+def _cumple_criterio_seguimiento(row):
+    """Determina si un registro pertenece a una población objeto de seguimiento.
+
+    Criterios (alto riesgo / mal pronóstico). Basta con cumplir UNO:
+      - Gestante (gp_gestan = 1)
+      - Antecedente de violencia / evento similar previo (antec = 1)
+      - Mecanismo: arma de fuego o cortopunzante (mecanismo en {4, 11})
+      - Mecanismo: ácido, álcalis o sustancias corrosivas (mecanismo = 13)
+      - Hospitalización por las lesiones (pac_hos_ = 1)
+      - Menor de 14 años
+      - Persona en condición de discapacidad (gp_discapa = 1)
+      - Persona de 70 años o más
+    """
+    # Edad en años (uni_med_ = 1 son años; meses/días => menor de 1 año)
+    uni = _to_int_safe(row.get("uni_med_"))
+    edad = _to_int_safe(row.get("edad_")) or 0
+    edad_anios = edad if uni == 1 else 0
+
+    mecanismo = _to_int_safe(row.get("mecanismo_utilizado_para_la_agresión"))
+
+    if _to_int_safe(row.get("gp_gestan")) == 1:
+        return True
+    if _to_int_safe(row.get("antec")) == 1:
+        return True
+    if mecanismo in (4, 11):
+        return True
+    if mecanismo == 13:
+        return True
+    if _to_int_safe(row.get("pac_hos_")) == 1:
+        return True
+    if edad_anios < 14:
+        return True
+    if _to_int_safe(row.get("gp_discapa")) == 1:
+        return True
+    if edad_anios >= 70:
+        return True
+    return False
+
+
 def transformar_base_875(df):
     """Transforma la base histórica al esquema reducido (39 columnas).
 
@@ -1555,6 +1614,11 @@ def transformar_base_875(df):
     n_inicial = len(df)
     df_no_sex = df[df["_nat_int"].isin([1, 2, 3])].copy()
     n_descartados = n_inicial - len(df_no_sex)
+
+    # Filtrar SOLO poblaciones objeto de seguimiento (alto riesgo / mal pronóstico)
+    mask_crit = df_no_sex.apply(_cumple_criterio_seguimiento, axis=1)
+    n_fuera_criterio = int((~mask_crit).sum())
+    df_no_sex = df_no_sex[mask_crit].copy()
 
     registros = []
     for _, row in df_no_sex.iterrows():
@@ -1615,7 +1679,7 @@ def transformar_base_875(df):
         registros.append(registro)
         time.sleep(0.001)  # IDs únicos
 
-    return pd.DataFrame(registros), n_descartados
+    return pd.DataFrame(registros), n_descartados, n_fuera_criterio
 
 
 def modulo_carga_masiva(spreadsheet):
@@ -1631,8 +1695,11 @@ def modulo_carga_masiva(spreadsheet):
         st.error("⛔ Solo el rol SECRETARÍA puede realizar carga masiva.")
         return
 
-    st.info("ℹ️ El sistema descarta automáticamente los registros de violencia sexual "
-            "(solo carga modalidades FÍSICA, PSICOLÓGICA y NEGLIGENCIA Y ABANDONO).")
+    st.info("ℹ️ La carga masiva ingresa **únicamente las poblaciones objeto de seguimiento** "
+            "(alto riesgo / mal pronóstico): gestantes, personas con discapacidad, personas de "
+            "70 años o más, menores de 14 años, casos con hospitalización, agresión con arma de "
+            "fuego / cortopunzante / ácido, o con antecedente de violencia previa. "
+            "Además se descartan automáticamente los registros de violencia sexual.")
 
     archivo = st.file_uploader("Seleccione el archivo Excel histórico (.xlsx)",
                                type=["xlsx", "xls"], key="carga_masiva_file")
@@ -1651,7 +1718,7 @@ def modulo_carga_masiva(spreadsheet):
         return
 
     with st.spinner("Transformando datos al esquema del aplicativo..."):
-        df_t, n_sex = transformar_base_875(df_raw)
+        df_t, n_sex, n_fuera = transformar_base_875(df_raw)
 
     with st.spinner("Verificando duplicados contra la base existente..."):
         df_exist = cargar_datos(spreadsheet, forzar=True)
@@ -1689,12 +1756,13 @@ def modulo_carga_masiva(spreadsheet):
 
     st.markdown("---")
     st.markdown("### 📊 Resumen")
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Total en archivo", len(df_raw))
     c2.metric("Sexuales descartados", n_sex)
-    c3.metric("Duplicados exactos omitidos", int(n_dup))
-    c4.metric("⚠️ Posibles duplicados", int(n_posible))
-    c5.metric("A cargar", len(df_n))
+    c3.metric("Fuera de criterio", int(n_fuera))
+    c4.metric("Duplicados exactos", int(n_dup))
+    c5.metric("⚠️ Posibles duplicados", int(n_posible))
+    c6.metric("A cargar", len(df_n))
 
     # --- Revisión de posibles duplicados (mismo documento, fecha distinta o vacía) ---
     excluir_posibles = False
