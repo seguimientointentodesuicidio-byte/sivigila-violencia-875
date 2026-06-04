@@ -498,8 +498,7 @@ def aviso_poblaciones(contexto="general"):
     poblaciones objeto (alto riesgo / mal pronóstico)."""
     texto = (
         "🎯 **Este sistema hace seguimiento ÚNICAMENTE a las poblaciones de alto riesgo / "
-        "mal pronóstico:** gestantes · personas con discapacidad · personas de 70 años o más · "
-        "menores de 14 años · casos con hospitalización · agresión con arma de fuego, "
+        "mal pronóstico:** gestantes · casos con hospitalización · agresión con arma de fuego, "
         "cortopunzante o ácido/sustancias corrosivas · antecedente de violencia previa."
     )
     if contexto == "registrar":
@@ -1568,21 +1567,13 @@ def _norm_fecha(val):
 def _cumple_criterio_seguimiento(row):
     """Determina si un registro pertenece a una población objeto de seguimiento.
 
-    Criterios (alto riesgo / mal pronóstico). Basta con cumplir UNO:
+    Criterios del protocolo (alto riesgo / mal pronóstico). Basta con cumplir UNO:
       - Gestante (gp_gestan = 1)
       - Antecedente de violencia / evento similar previo (antec = 1)
       - Mecanismo: arma de fuego o cortopunzante (mecanismo en {4, 11})
       - Mecanismo: ácido, álcalis o sustancias corrosivas (mecanismo = 13)
       - Hospitalización por las lesiones (pac_hos_ = 1)
-      - Menor de 14 años
-      - Persona en condición de discapacidad (gp_discapa = 1)
-      - Persona de 70 años o más
     """
-    # Edad en años (uni_med_ = 1 son años; meses/días => menor de 1 año)
-    uni = _to_int_safe(row.get("uni_med_"))
-    edad = _to_int_safe(row.get("edad_")) or 0
-    edad_anios = edad if uni == 1 else 0
-
     mecanismo = _to_int_safe(row.get("mecanismo_utilizado_para_la_agresión"))
 
     if _to_int_safe(row.get("gp_gestan")) == 1:
@@ -1594,12 +1585,6 @@ def _cumple_criterio_seguimiento(row):
     if mecanismo == 13:
         return True
     if _to_int_safe(row.get("pac_hos_")) == 1:
-        return True
-    if edad_anios < 14:
-        return True
-    if _to_int_safe(row.get("gp_discapa")) == 1:
-        return True
-    if edad_anios >= 70:
         return True
     return False
 
@@ -1696,9 +1681,8 @@ def modulo_carga_masiva(spreadsheet):
         return
 
     st.info("ℹ️ La carga masiva ingresa **únicamente las poblaciones objeto de seguimiento** "
-            "(alto riesgo / mal pronóstico): gestantes, personas con discapacidad, personas de "
-            "70 años o más, menores de 14 años, casos con hospitalización, agresión con arma de "
-            "fuego / cortopunzante / ácido, o con antecedente de violencia previa. "
+            "(alto riesgo / mal pronóstico): gestantes, casos con hospitalización, agresión con "
+            "arma de fuego / cortopunzante / ácido, o con antecedente de violencia previa. "
             "Además se descartan automáticamente los registros de violencia sexual.")
 
     archivo = st.file_uploader("Seleccione el archivo Excel histórico (.xlsx)",
