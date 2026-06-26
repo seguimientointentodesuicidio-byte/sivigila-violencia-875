@@ -163,7 +163,8 @@ COLUMNAS_DATOS = [
     "seguimiento_1", "seguimiento_2", "seguimiento_3",
     "ruta_atencion_integral", "asiste_servicios", "num_seguimientos_realizados",
     "abandono_proceso", "reincidencia_nuevo_evento", "estado_caso", "observaciones",
-    "ultima_modificacion_por", "ultima_modificacion_fecha"
+    "ultima_modificacion_por", "ultima_modificacion_fecha",
+    "telefono", "direccion_residencia"
 ]
 
 
@@ -557,6 +558,12 @@ def modulo_formulario(spreadsheet):
             curso_vida = calcular_curso_vida(edad)
             st.text_input("Curso de vida (automático)", value=curso_vida, disabled=True)
 
+        col1, col2 = st.columns(2)
+        with col1:
+            telefono = st.text_input("Teléfono de contacto", placeholder="Celular o fijo")
+        with col2:
+            direccion_residencia = st.text_input("Dirección de residencia", placeholder="Dirección o barrio")
+
         if edad > 0 and edad < 14:
             st.error("🚨 **CASO PRIORITARIO** - Menor de 14 años. Reporte obligatorio a ICBF y Fiscalía.")
 
@@ -701,6 +708,8 @@ def modulo_formulario(spreadsheet):
                         "estado_caso": estado_caso,
                         "observaciones": observaciones,
                         "funcionario_reporta": st.session_state.get("nombre_completo", ""),
+                        "telefono": telefono.strip(),
+                        "direccion_residencia": direccion_residencia.upper().strip(),
                     }
 
                     with st.spinner("Guardando registro..."):
@@ -1209,6 +1218,12 @@ def modulo_edicion(spreadsheet):
                                  index=(MUNICIPIOS_VALLE.index(registro.get("municipio_residencia", "")) + 1)
                                  if registro.get("municipio_residencia", "") in MUNICIPIOS_VALLE else 0)
 
+            col1, col2 = st.columns(2)
+            with col1:
+                tel_e = st.text_input("Teléfono de contacto", value=str(registro.get("telefono", "")))
+            with col2:
+                dir_e = st.text_input("Dirección de residencia", value=str(registro.get("direccion_residencia", "")))
+
             # Notificación / Atención
             st.markdown("##### 📋 Notificación y Atención")
             col1, col2 = st.columns(2)
@@ -1317,6 +1332,8 @@ def modulo_edicion(spreadsheet):
                     "reincidencia_nuevo_evento": rein_e,
                     "estado_caso": est_e,
                     "observaciones": obs_e,
+                    "telefono": tel_e.strip(),
+                    "direccion_residencia": dir_e.upper().strip(),
                 }
 
                 with st.spinner("Actualizando registro..."):
@@ -1625,6 +1642,15 @@ def transformar_base_875(df):
 
         reporte = "SI" if _to_int_safe(row.get("inf_aut")) == 1 else "NO"
 
+        tel = str(row.get("telefono_", "")).strip()
+        if tel.endswith(".0"):
+            tel = tel[:-2]
+        if tel.lower() == "nan":
+            tel = ""
+        dir_res = str(row.get("dir_res_", "")).strip().upper()
+        if dir_res == "NAN":
+            dir_res = ""
+
         registro = {
             "id": generar_id(),
             "fecha_digitacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1660,6 +1686,8 @@ def transformar_base_875(df):
             "observaciones": f"Carga masiva - {datetime.now().strftime('%Y-%m-%d')}",
             "ultima_modificacion_por": st.session_state.get("nombre_completo", "CARGA MASIVA"),
             "ultima_modificacion_fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "telefono": tel,
+            "direccion_residencia": dir_res,
         }
         registros.append(registro)
         time.sleep(0.001)  # IDs únicos
