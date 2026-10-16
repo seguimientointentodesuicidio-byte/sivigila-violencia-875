@@ -827,8 +827,10 @@ def modulo_dashboard(spreadsheet):
         df_f = df_f[df_f["estado_caso"].isin(filtro_estado)]
     if filtro_sexo:
         df_f = df_f[df_f["sexo"].isin(filtro_sexo)]
-    if filtro_fecha and isinstance(filtro_fecha, tuple) and len(filtro_fecha) == 2:
-        df_f["_fec"] = pd.to_datetime(df_f["fecha_evento"], errors="coerce")
+    # El rango por defecto (fecha mínima a máxima) no filtra: así no se pierden los casos sin fecha
+    if (filtro_fecha and isinstance(filtro_fecha, tuple) and len(filtro_fecha) == 2
+            and filtro_fecha != (fecha_min, fecha_max)):
+        df_f["_fec"] = pd.to_datetime(df_f["fecha_evento"], format="%Y-%m-%d", errors="coerce")
         df_f = df_f[(df_f["_fec"] >= pd.Timestamp(filtro_fecha[0])) &
                     (df_f["_fec"] <= pd.Timestamp(filtro_fecha[1]))]
         df_f = df_f.drop(columns=["_fec"], errors="ignore")
@@ -1537,10 +1539,10 @@ def _to_int_safe(val):
 
 
 def _fmt_fecha(val):
-    if pd.isna(val) or str(val).strip() in ("", "None", "NaT"):
-        return ""
+    # La base SIVIGILA trae las fechas en ISO (aaaa-mm-dd). Con dayfirst=True pandas leía
+    # "2026-03-05" como 3 de mayo: invertía día y mes cuando el día era <= 12 (corregido 16-10-2026).
     try:
-        return pd.to_datetime(val, dayfirst=True, errors="coerce").strftime("%Y-%m-%d")
+        return _norm_fecha(val)
     except Exception:
         return ""
 
@@ -1575,9 +1577,10 @@ def _norm_fecha(val):
     if len(s) >= 10 and s[4] == "-" and s[7] == "-":
         f = pd.to_datetime(s[:10], format="%Y-%m-%d", errors="coerce")
     else:
-        f = pd.to_datetime(s, dayfirst=True, errors="coerce")
+        # dd/mm/aaaa con formato explícito (nunca adivinar el orden)
+        f = pd.to_datetime(s[:10], format="%d/%m/%Y", errors="coerce")
         if pd.isna(f):
-            f = pd.to_datetime(s, errors="coerce")
+            f = pd.to_datetime(s, dayfirst=True, errors="coerce")
     return "" if pd.isna(f) else f.strftime("%Y-%m-%d")
 
 
