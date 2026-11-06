@@ -16,6 +16,7 @@ from datetime import datetime, date
 import hashlib
 import io
 import time
+import unicodedata
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -464,6 +465,8 @@ def mostrar_sidebar():
             "✏️ Editar / Actualizar Caso",
             "📥 Exportar Datos"
         ]
+        if _puede_cargar_seguimientos():
+            opciones.append("📤 Cargar Seguimientos")
         if st.session_state.get("rol") == "SECRETARÍA":
             opciones.append("📂 Carga Masiva")
             opciones.append("⚙️ Gestionar Usuarios")
@@ -1861,6 +1864,359 @@ def modulo_carga_masiva(spreadsheet):
 
 
 # ============================================================
+# MÓDULO 7: CARGA MASIVA DE SEGUIMIENTOS (EPS)
+# ============================================================
+# Pedido de Emssanar (30-10-2026): descargan el Excel de «Exportar Datos», le llenan los seguimientos
+# y lo suben para no actualizar caso por caso. Solo ACTUALIZA casos que ya existen y solo las columnas
+# de COLUMNAS_CARGA_SEG: los casos vienen del SIVIGILA y por aquí no entra ninguno nuevo.
+
+EPS_CARGA_SEG = ["EMSSANAR"]  # EPS habilitadas; el rol SECRETARÍA siempre puede
+
+COLUMNAS_CARGA_SEG = {
+    "atencion_salud_mental": ["NO", "SI"],
+    "fecha_salud_mental": "FECHA",
+    "remision_proteccion": ["NO", "SI", "NO APLICA"],
+    "reporte_autoridades": ["NO", "SI", "NO APLICA"],
+    "seguimiento_1": "TEXTO",
+    "seguimiento_2": "TEXTO",
+    "seguimiento_3": "TEXTO",
+    "ruta_atencion_integral": ["SI", "NO", "EN PROCESO"],
+    "asiste_servicios": ["SI", "NO", "SIN CONTACTO"],
+    "num_seguimientos_realizados": "ENTERO",
+    "abandono_proceso": ["NO", "SI", "SIN INFORMACIÓN"],
+    "reincidencia_nuevo_evento": ["NO", "SI", "SIN INFORMACIÓN"],
+    "estado_caso": ESTADOS_CASO,
+    "observaciones": "TEXTO",
+}
+
+COLUMNAS_BITACORA_SEG = ["fecha", "usuario", "id", "numero_documento", "columna", "valor_anterior", "valor_nuevo"]
+
+
+def _puede_cargar_seguimientos():
+    if st.session_state.get("rol") == "SECRETARÍA":
+        return True
+    return st.session_state.get("eps_asignada", "") in EPS_CARGA_SEG
+
+
+def _cant_seg(n, singular, plural):
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def _texto_seg(val):
+    """Texto de una celda, sin espacios en los extremos (incluye el espacio duro de las páginas web)."""
+    s = "" if val is None else str(val).replace("\xa0", " ").strip()
+    return "" if s.lower() in ("nan", "nat", "none") else s
+
+
+def _clave_seg(val):
+    """Forma de comparar textos: sin tildes y sin importar mayúsculas, espacios ni saltos de línea."""
+    s = unicodedata.normalize("NFD", _texto_seg(val))
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return " ".join(s.upper().split())
+
+
+def _fecha_seg(s):
+    """Fecha en aaaa-mm-dd o dd/mm/aaaa, con formato explícito: nunca se adivina el orden."""
+    partes = s.split()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(partes[0], fmt).date()
+        except (ValueError, IndexError):
+            pass
+    return None
+
+
+def _valor_seg(columna, crudo):
+    """Devuelve (valor para guardar, motivo si no es válido). Una celda vacía devuelve ''."""
+    regla = COLUMNAS_CARGA_SEG[columna]
+    s = _texto_seg(crudo)
+    if not s:
+        return "", None
+    if regla == "FECHA":
+        f = _fecha_seg(s)
+        if f is None:
+            return s, f"{columna}: «{s[:30]}» no es una fecha válida (use dd/mm/aaaa)"
+        if f > date.today():
+            return s, f"{columna}: la fecha {f.strftime('%d/%m/%Y')} está en el futuro"
+        return f.strftime("%Y-%m-%d"), None
+    if regla == "ENTERO":
+        try:
+            n = float(s.replace(",", "."))
+        except ValueError:
+            n = -1.0
+        if not n.is_integer() or not 0 <= n <= 50:
+            return s, f"{columna}: «{s[:30]}» debe ser un número entero entre 0 y 50"
+        return str(int(n)), None
+    if isinstance(regla, list):
+        for v in regla:
+            if _clave_seg(v) == _clave_seg(s):
+                return v, None
+        return s, f"{columna}: «{s[:30]}» no es válido (use {', '.join(regla)})"
+    if len(s) > 45000:
+        return s, f"{columna}: el texto es demasiado largo ({len(s)} caracteres)"
+    return s, None
+
+
+def _igual_seg(columna, actual, nuevo):
+    valor, motivo = _valor_seg(columna, actual)
+    return _clave_seg(actual if motivo else valor) == _clave_seg(nuevo)
+
+
+def planear_carga_seg(df_arch, valores_hoja, rol, eps_usuario):
+    """Compara el Excel con la hoja y decide qué cambia. No escribe nada."""
+    enc = [str(h).strip() for h in valores_hoja[0]]
+    pos = {h: i for i, h in enumerate(enc)}
+    casos, repetidos_hoja = {}, set()
+    for n, fila in enumerate(valores_hoja[1:], start=2):
+        f = (list(fila) + [""] * len(enc))[:len(enc)]
+        cid = f[pos["id"]].strip()
+        if cid in casos:
+            repetidos_hoja.add(cid)
+        if cid:
+            casos[cid] = (n, f)
+
+    cols_carga = [c for c in COLUMNAS_CARGA_SEG if c in df_arch.columns and c in pos]
+    no_comparar = ("id", "fecha_digitacion", "ultima_modificacion_por", "ultima_modificacion_fecha")
+    cols_protegidas = [c for c in df_arch.columns
+                       if c in pos and c not in COLUMNAS_CARGA_SEG and c not in no_comparar]
+    ids_arch = df_arch["id"].map(_texto_seg)
+    veces = ids_arch[ids_arch != ""].value_counts().to_dict()
+
+    plan = {"cambios": [], "rechazos": [], "conflictos": [], "ignorados": {},
+            "sin_cambios": 0, "filas": 0, "pos": pos}
+
+    for i, fila in enumerate(df_arch.to_dict("records")):
+        if not any(_texto_seg(v) for v in fila.values()):
+            continue
+        plan["filas"] += 1
+        fila_x = i + 2
+        cid = _texto_seg(fila["id"])
+        doc = _texto_seg(fila["numero_documento"])
+
+        def rechazar(motivo):
+            plan["rechazos"].append({"Fila del Excel": fila_x, "id": cid, "Documento": doc, "Motivo": motivo})
+
+        if not cid:
+            rechazar("La fila no trae id. Por aquí no se crean casos nuevos.")
+            continue
+        if veces.get(cid, 0) > 1:
+            rechazar("El mismo id aparece varias veces en el archivo.")
+            continue
+        if cid not in casos:
+            rechazar("Ese id no existe en el aplicativo. Por aquí no se crean casos nuevos.")
+            continue
+        if cid in repetidos_hoja:
+            rechazar("Ese id está repetido en el aplicativo. Avise a la Secretaría.")
+            continue
+        n, f = casos[cid]
+        if rol != "SECRETARÍA" and f[pos["eps_reporta"]].strip() != eps_usuario:
+            rechazar("Este caso pertenece a otra EPS.")
+            continue
+        if _norm_doc(doc) != _norm_doc(f[pos["numero_documento"]]):
+            rechazar("El documento no coincide con el de ese id. Revise si se corrieron las filas al ordenar el Excel.")
+            continue
+
+        diferencias, errores = [], []
+        for col in cols_carga:
+            nuevo, motivo = _valor_seg(col, fila[col])
+            actual = f[pos[col]]
+            if not nuevo or _igual_seg(col, actual, nuevo):
+                continue
+            if motivo:
+                errores.append(motivo)
+            else:
+                diferencias.append((col, actual, nuevo))
+        if errores:
+            rechazar("; ".join(errores))
+            continue
+
+        for c in cols_protegidas:
+            if _clave_seg(fila[c]) != _clave_seg(f[pos[c]]):
+                plan["ignorados"][c] = plan["ignorados"].get(c, 0) + 1
+
+        if not diferencias:
+            plan["sin_cambios"] += 1
+            continue
+
+        # Si el caso se modificó después de descargar el archivo, solo se llenan celdas vacías:
+        # lo que ya está registrado no se pisa con un dato que puede ser más viejo.
+        desactualizado = (_texto_seg(fila["ultima_modificacion_fecha"])[:19]
+                          != _texto_seg(f[pos["ultima_modificacion_fecha"]])[:19])
+        paciente = f"{f[pos['nombres']]} {f[pos['apellidos']]}".strip()
+        for col, actual, nuevo in diferencias:
+            if desactualizado and _texto_seg(actual):
+                plan["conflictos"].append({"Fila del Excel": fila_x, "Caso": paciente, "Documento": doc,
+                                           "Columna": col, "En el aplicativo": actual, "En su archivo": nuevo})
+            else:
+                plan["cambios"].append({"fila": n, "id": cid, "documento": doc, "paciente": paciente,
+                                        "columna": col, "antes": actual, "despues": nuevo})
+    return plan
+
+
+def obtener_hoja_bitacora_seg(spreadsheet):
+    """Retorna la hoja de bitácora de las cargas (la crea si no existe)."""
+    try:
+        return spreadsheet.worksheet("BITACORA_SEGUIMIENTOS")
+    except gspread.exceptions.WorksheetNotFound:
+        hoja = spreadsheet.add_worksheet(title="BITACORA_SEGUIMIENTOS", rows=1000, cols=len(COLUMNAS_BITACORA_SEG))
+        hoja.append_row(COLUMNAS_BITACORA_SEG, table_range="A1")
+        return hoja
+
+
+def aplicar_carga_seg(spreadsheet, plan, usuario):
+    """Escribe solo las celdas que cambian y las relee. Devuelve (celdas confirmadas, celdas que fallaron)."""
+    if not plan["cambios"]:
+        return 0, []
+    hoja = obtener_hoja_datos(spreadsheet)
+    pos = plan["pos"]
+    ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # La bitácora se escribe primero: con el valor anterior de cada celda, la carga se puede revertir
+    obtener_hoja_bitacora_seg(spreadsheet).append_rows(
+        [[ahora, usuario, c["id"], c["documento"], c["columna"], c["antes"], c["despues"]]
+         for c in plan["cambios"]],
+        value_input_option="RAW", table_range="A1")
+
+    rangos = [{"range": f"{col_num_a_letra(pos[c['columna']] + 1)}{c['fila']}", "values": [[c["despues"]]]}
+              for c in plan["cambios"]]
+    for fila in {c["fila"] for c in plan["cambios"]}:
+        rangos.append({"range": f"{col_num_a_letra(pos['ultima_modificacion_por'] + 1)}{fila}",
+                       "values": [[usuario]]})
+        rangos.append({"range": f"{col_num_a_letra(pos['ultima_modificacion_fecha'] + 1)}{fila}",
+                       "values": [[ahora]]})
+
+    # RAW: un texto que empiece por «=» queda como texto y una fecha no cambia de formato
+    for i in range(0, len(rangos), 1000):
+        hoja.batch_update(rangos[i:i + 1000], value_input_option="RAW")
+
+    if "_datos_cache_time" in st.session_state:
+        st.session_state["_datos_cache_time"] = 0
+
+    valores = hoja.get_all_values()
+    fallas = []
+    for c in plan["cambios"]:
+        f = (valores[c["fila"] - 1] + [""] * len(pos))[:len(pos)] if c["fila"] <= len(valores) else [""] * len(pos)
+        if f[pos["id"]].strip() != c["id"] or _clave_seg(f[pos[c["columna"]]]) != _clave_seg(c["despues"]):
+            fallas.append(c)
+    return len(plan["cambios"]) - len(fallas), fallas
+
+
+def modulo_carga_seguimientos(spreadsheet):
+    st.markdown("""
+    <div class="main-header">
+        <h1>📤 Cargar Seguimientos</h1>
+        <p>Actualice los seguimientos de varios casos a la vez con el Excel del aplicativo</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not _puede_cargar_seguimientos():
+        st.error("⛔ Esta opción aún no está habilitada para su EPS.")
+        return
+
+    st.info("**Cómo funciona**\n\n"
+            "1. Descargue la base en **📥 Exportar Datos**, siempre la más reciente, y llene los seguimientos "
+            "en ese Excel.\n"
+            "2. No cambie las columnas `id`, `numero_documento` ni `ultima_modificacion_fecha`, y no agregue casos.\n"
+            "3. Suba el archivo aquí, revise el resumen y confirme. Nada se guarda antes de confirmar.\n\n"
+            "Solo se actualizan los casos que ya están en el aplicativo, que son los que vienen del SIVIGILA. "
+            "Una celda vacía no borra lo que ya está registrado.")
+
+    with st.expander("📋 Columnas que se actualizan y valores permitidos"):
+        st.dataframe(pd.DataFrame(
+            [{"Columna": c, "Valores permitidos": ", ".join(r) if isinstance(r, list) else
+              {"FECHA": "Fecha (dd/mm/aaaa)", "ENTERO": "Número entero de 0 a 50", "TEXTO": "Texto libre"}[r]}
+             for c, r in COLUMNAS_CARGA_SEG.items()]),
+            use_container_width=True, hide_index=True)
+
+    archivo = st.file_uploader("Seleccione el Excel diligenciado (.xlsx)", type=["xlsx"], key="carga_seg_file")
+    if archivo is None:
+        return
+
+    try:
+        libro = pd.ExcelFile(archivo)
+        pestana = "TODOS_LOS_DATOS" if "TODOS_LOS_DATOS" in libro.sheet_names else libro.sheet_names[0]
+        df_arch = pd.read_excel(libro, sheet_name=pestana, dtype=str, keep_default_na=False)
+        df_arch.columns = [str(c).strip() for c in df_arch.columns]
+    except Exception as e:
+        st.error(f"❌ Error al leer el archivo: {e}")
+        return
+
+    faltan = [c for c in ("id", "numero_documento", "ultima_modificacion_fecha") if c not in df_arch.columns]
+    if faltan:
+        st.error(f"❌ Al archivo le falta: {', '.join(faltan)}. Use el Excel que descarga en 📥 Exportar Datos.")
+        return
+    if not any(c in df_arch.columns for c in COLUMNAS_CARGA_SEG):
+        st.error("❌ El archivo no trae ninguna de las columnas de seguimiento.")
+        return
+
+    rol = st.session_state.get("rol")
+    eps = st.session_state.get("eps_asignada", "")
+    hoja = obtener_hoja_datos(spreadsheet)
+    with st.spinner("Comparando el archivo con el aplicativo..."):
+        plan = planear_carga_seg(df_arch, hoja.get_all_values(), rol, eps)
+
+    n_casos = len({c["id"] for c in plan["cambios"]})
+    st.markdown("---")
+    st.markdown("### 📊 Resumen")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("Filas en el archivo", plan["filas"])
+    c2.metric("Casos a actualizar", n_casos)
+    c3.metric("Celdas que cambian", len(plan["cambios"]))
+    c4.metric("Casos sin cambios", plan["sin_cambios"])
+    c5.metric("Casos rechazados", len(plan["rechazos"]))
+    c6.metric("Celdas en conflicto", len(plan["conflictos"]))
+
+    if plan["rechazos"]:
+        st.error(f"❌ {_cant_seg(len(plan['rechazos']), 'fila no se cargará', 'filas no se cargarán')}. "
+                 "Corríjalas en el Excel y vuelva a subirlo.")
+        st.dataframe(pd.DataFrame(plan["rechazos"]), use_container_width=True, hide_index=True)
+
+    if plan["conflictos"]:
+        st.warning(f"⚠️ {_cant_seg(len(plan['conflictos']), 'celda no se cambiará', 'celdas no se cambiarán')}: "
+                   "el caso se modificó en el aplicativo después de que descargó su archivo, y lo registrado "
+                   "es distinto. Descargue la base de nuevo o edítelo en ✏️ Editar / Actualizar Caso.")
+        st.dataframe(pd.DataFrame(plan["conflictos"]), use_container_width=True, hide_index=True)
+
+    if plan["ignorados"]:
+        detalle = ", ".join(f"{c} ({n})" for c, n in plan["ignorados"].items())
+        st.warning("⚠️ Estas columnas no se cargan por aquí y sus cambios se ignoraron: "
+                   f"{detalle}. Para corregirlas use ✏️ Editar / Actualizar Caso.")
+
+    if not plan["cambios"]:
+        st.warning("⚠️ No hay cambios para guardar.")
+        return
+
+    st.markdown("### 👁️ Vista previa de los cambios")
+    vista = pd.DataFrame(plan["cambios"]).rename(columns={
+        "paciente": "Caso", "documento": "Documento", "columna": "Columna",
+        "antes": "Valor actual", "despues": "Valor nuevo"})
+    st.dataframe(vista[["Caso", "Documento", "Columna", "Valor actual", "Valor nuevo"]].head(300),
+                 use_container_width=True, hide_index=True)
+    if len(vista) > 300:
+        st.caption(f"Mostrando 300 de {len(vista)} celdas.")
+
+    st.markdown("---")
+    texto_boton = f"✅ Confirmar y actualizar {_cant_seg(n_casos, 'caso', 'casos')}"
+    if st.button(texto_boton, type="primary", use_container_width=True):
+        with st.spinner("Guardando..."):
+            # Se vuelve a leer la hoja justo antes de escribir, por si alguien cambió algo o entraron filas
+            plan = planear_carga_seg(df_arch, hoja.get_all_values(), rol, eps)
+            try:
+                ok, fallas = aplicar_carga_seg(spreadsheet, plan, st.session_state.get("nombre_completo", ""))
+            except Exception as e:
+                st.error(f"❌ No se pudo terminar de guardar: {e}. Vuelva a subir el mismo archivo: "
+                         "solo se aplicará lo que falte.")
+                return
+        if fallas:
+            st.error(f"❌ {_cant_seg(len(fallas), 'celda no quedó guardada', 'celdas no quedaron guardadas')}. "
+                     "Vuelva a subir el mismo archivo.")
+        else:
+            st.success(f"🎉 Carga terminada: "
+                       f"{_cant_seg(ok, 'celda guardada y comprobada', 'celdas guardadas y comprobadas')} "
+                       "en el aplicativo.")
+
+
+# ============================================================
 # FUNCIÓN PRINCIPAL
 # ============================================================
 
@@ -1884,6 +2240,8 @@ def main():
         modulo_edicion(spreadsheet)
     elif pagina == "📥 Exportar Datos":
         modulo_exportacion(spreadsheet)
+    elif pagina == "📤 Cargar Seguimientos":
+        modulo_carga_seguimientos(spreadsheet)
     elif pagina == "📂 Carga Masiva":
         modulo_carga_masiva(spreadsheet)
     elif pagina == "⚙️ Gestionar Usuarios":
