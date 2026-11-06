@@ -93,6 +93,8 @@ st.markdown(f"""
         background: linear-gradient(180deg, {COLOR_AZUL_OSCURO} 0%, #0D2137 100%);
     }}
     [data-testid="stSidebar"] * {{ color: white !important; }}
+    [data-testid="stSidebar"] .stButton button,
+    [data-testid="stSidebar"] .stButton button * {{ color: {COLOR_AZUL_OSCURO} !important; }}
 
     .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
     .stTabs [data-baseweb="tab"] {{
@@ -2168,7 +2170,7 @@ def modulo_carga_seguimientos(spreadsheet):
 
     if plan["rechazos"]:
         st.error(f"❌ {_cant_seg(len(plan['rechazos']), 'fila no se cargará', 'filas no se cargarán')}. "
-                 "Corríjalas en el Excel y vuelva a subirlo.")
+                 f"{'Corríjala' if len(plan['rechazos']) == 1 else 'Corríjalas'} en el Excel y vuelva a subirlo.")
         st.dataframe(pd.DataFrame(plan["rechazos"]), use_container_width=True, hide_index=True)
 
     if plan["conflictos"]:
