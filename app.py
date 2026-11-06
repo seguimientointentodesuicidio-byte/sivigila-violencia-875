@@ -15,6 +15,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import hashlib
 import io
+import re
 import time
 import unicodedata
 
@@ -1420,7 +1421,8 @@ def modulo_exportacion(spreadsheet):
         st.markdown("#### 📊 Descargar Excel (.xlsx)")
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            df_e.to_excel(writer, sheet_name="TODOS_LOS_DATOS", index=False)
+            df_e.replace(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", regex=True).to_excel(
+                writer, sheet_name="TODOS_LOS_DATOS", index=False)
         buffer.seek(0)
         st.download_button(
             label="⬇️ Descargar Excel",
@@ -1891,7 +1893,7 @@ COLUMNAS_CARGA_SEG = {
     "observaciones": "TEXTO",
 }
 
-COLUMNAS_BITACORA_SEG = ["fecha", "usuario", "id", "numero_documento", "columna", "valor_anterior", "valor_nuevo"]
+COLUMNAS_BITACORA_SEG = ["fecha", "usuario", "fila", "id", "numero_documento", "columna", "valor_anterior", "valor_nuevo"]
 
 
 def _puede_cargar_seguimientos():
@@ -1905,8 +1907,10 @@ def _cant_seg(n, singular, plural):
 
 
 def _texto_seg(val):
-    """Texto de una celda, sin espacios en los extremos (incluye el espacio duro de las páginas web)."""
-    s = "" if val is None else str(val).replace("\xa0", " ").strip()
+    """Texto de una celda, sin espacios en los extremos ni los caracteres invisibles que traen Excel y las páginas web."""
+    s = "" if val is None else str(val)
+    s = s.replace("_x000D_", "").replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
+    s = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff\x00-\x08\x0b\x0c\x0e-\x1f]", "", s).strip()
     return "" if s.lower() in ("nan", "nat", "none") else s
 
 
@@ -1917,13 +1921,22 @@ def _clave_seg(val):
     return " ".join(s.upper().split())
 
 
+def _nombre_col_seg(col):
+    """Encabezado en la forma del aplicativo: «Seguimiento 1» queda seguimiento_1."""
+    k = _clave_seg(col).replace(" ", "_").lower()
+    return k if k in COLUMNAS_DATOS else str(col).strip()
+
+
 def _fecha_seg(s):
     """Fecha en aaaa-mm-dd o dd/mm/aaaa, con formato explícito: nunca se adivina el orden."""
-    partes = s.split()
+    m = re.fullmatch(r"(\S+)(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?", s)
+    if not m:
+        return None
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
         try:
-            return datetime.strptime(partes[0], fmt).date()
-        except (ValueError, IndexError):
+            f = datetime.strptime(m.group(1), fmt).date()
+            return f if f.year >= 2000 else None
+        except ValueError:
             pass
     return None
 
@@ -1942,18 +1955,19 @@ def _valor_seg(columna, crudo):
             return s, f"{columna}: la fecha {f.strftime('%d/%m/%Y')} está en el futuro"
         return f.strftime("%Y-%m-%d"), None
     if regla == "ENTERO":
-        try:
-            n = float(s.replace(",", "."))
-        except ValueError:
-            n = -1.0
-        if not n.is_integer() or not 0 <= n <= 50:
+        m = re.fullmatch(r"([0-9]{1,2})(?:[.,]0+)?", s)
+        if not m or int(m.group(1)) > 50:
             return s, f"{columna}: «{s[:30]}» debe ser un número entero entre 0 y 50"
-        return str(int(n)), None
+        return str(int(m.group(1))), None
     if isinstance(regla, list):
         for v in regla:
             if _clave_seg(v) == _clave_seg(s):
                 return v, None
         return s, f"{columna}: «{s[:30]}» no es válido (use {', '.join(regla)})"
+    if s.startswith("="):
+        return s, f"{columna}: el texto no puede empezar por «=», porque Excel lo tomaría como una fórmula"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2} 00:00:00", s):  # Excel convirtió en fecha un texto dd/mm/aaaa
+        s = datetime.strptime(s[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
     if len(s) > 45000:
         return s, f"{columna}: el texto es demasiado largo ({len(s)} caracteres)"
     return s, None
@@ -1961,7 +1975,12 @@ def _valor_seg(columna, crudo):
 
 def _igual_seg(columna, actual, nuevo):
     valor, motivo = _valor_seg(columna, actual)
-    return _clave_seg(actual if motivo else valor) == _clave_seg(nuevo)
+    base = actual if motivo else valor
+    if COLUMNAS_CARGA_SEG[columna] == "TEXTO":
+        a, n = " ".join(_texto_seg(base).split()), " ".join(_texto_seg(nuevo).split())
+        # Excel corta las celdas en 32.767 caracteres: un texto más largo no se pisa con su versión cortada
+        return a == n or (len(a) > 32000 and a.startswith(n))
+    return _clave_seg(base) == _clave_seg(nuevo)
 
 
 def planear_carga_seg(df_arch, valores_hoja, rol, eps_usuario):
@@ -1978,14 +1997,25 @@ def planear_carga_seg(df_arch, valores_hoja, rol, eps_usuario):
             casos[cid] = (n, f)
 
     cols_carga = [c for c in COLUMNAS_CARGA_SEG if c in df_arch.columns and c in pos]
+    cols_derecha = [c for c in ("telefono", "direccion_residencia") if c in df_arch.columns and c in pos]
     no_comparar = ("id", "fecha_digitacion", "ultima_modificacion_por", "ultima_modificacion_fecha")
     cols_protegidas = [c for c in df_arch.columns
                        if c in pos and c not in COLUMNAS_CARGA_SEG and c not in no_comparar]
     ids_arch = df_arch["id"].map(_texto_seg)
     veces = ids_arch[ids_arch != ""].value_counts().to_dict()
 
+    # Un texto largo que hoy está en un solo caso y aparece en otro delata filas corridas
+    duenos = {}
+    for cid, (_, f) in casos.items():
+        for col in cols_carga:
+            if COLUMNAS_CARGA_SEG[col] == "TEXTO":
+                k = _clave_seg(f[pos[col]])
+                if len(k) >= 60:
+                    duenos.setdefault((col, k), set()).add(cid)
+
     plan = {"cambios": [], "rechazos": [], "conflictos": [], "ignorados": {},
-            "sin_cambios": 0, "filas": 0, "pos": pos}
+            "sin_cambios": 0, "filas": 0, "pos": pos, "bloqueo": ""}
+    corridas, aceptadas = 0, []
 
     for i, fila in enumerate(df_arch.to_dict("records")):
         if not any(_texto_seg(v) for v in fila.values()):
@@ -2017,6 +2047,14 @@ def planear_carga_seg(df_arch, valores_hoja, rol, eps_usuario):
         if _norm_doc(doc) != _norm_doc(f[pos["numero_documento"]]):
             rechazar("El documento no coincide con el de ese id. Revise si se corrieron las filas al ordenar el Excel.")
             continue
+        # Teléfono y dirección están a la derecha de los seguimientos: si los dos difieren, se ordenó solo una parte de la tabla
+        if len(cols_derecha) == 2 and all(_norm_doc(_clave_seg(fila[c])) != _norm_doc(_clave_seg(f[pos[c]]))
+                                          for c in cols_derecha):
+            corridas += 1
+            rechazar("El teléfono y la dirección no son los de ese caso. Revise si se corrieron las filas al ordenar "
+                     "solo una parte del Excel.")
+            continue
+        aceptadas.append((fila, f))
 
         diferencias, errores = [], []
         for col in cols_carga:
@@ -2024,8 +2062,11 @@ def planear_carga_seg(df_arch, valores_hoja, rol, eps_usuario):
             actual = f[pos[col]]
             if not nuevo or _igual_seg(col, actual, nuevo):
                 continue
+            ajeno = duenos.get((col, _clave_seg(nuevo)), set())
             if motivo:
                 errores.append(motivo)
+            elif len(ajeno) == 1 and cid not in ajeno:
+                errores.append(f"{col}: ese texto está registrado en otro caso. Revise si se corrieron las filas.")
             else:
                 diferencias.append((col, actual, nuevo))
         if errores:
@@ -2050,8 +2091,24 @@ def planear_carga_seg(df_arch, valores_hoja, rol, eps_usuario):
                 plan["conflictos"].append({"Fila del Excel": fila_x, "Caso": paciente, "Documento": doc,
                                            "Columna": col, "En el aplicativo": actual, "En su archivo": nuevo})
             else:
+                reemplaza = (COLUMNAS_CARGA_SEG[col] in ("TEXTO", "FECHA") and bool(_texto_seg(actual))
+                             and _clave_seg(actual) not in _clave_seg(nuevo))
                 plan["cambios"].append({"fila": n, "id": cid, "documento": doc, "paciente": paciente,
-                                        "columna": col, "antes": actual, "despues": nuevo})
+                                        "columna": col, "antes": actual, "despues": nuevo, "reemplaza": reemplaza})
+
+    if corridas >= 2 and corridas >= 0.1 * plan["filas"]:
+        plan["bloqueo"] = (f"{corridas} filas traen un teléfono y una dirección que no son los de su caso. Parece que se "
+                           "ordenó solo una parte de la tabla, y los seguimientos quedarían en la persona equivocada. "
+                           "Descargue la base de nuevo y, si va a ordenar, seleccione toda la tabla.")
+    else:
+        for col in cols_carga:
+            a = [_clave_seg(_valor_seg(col, fi[col])[0]) for fi, _ in aceptadas]
+            h = [_clave_seg(_valor_seg(col, f[pos[col]])[0]) for _, f in aceptadas]
+            if sum(x != y for x, y in zip(a, h)) >= 3 and sorted(a) == sorted(h):
+                plan["bloqueo"] = (f"La columna {col} trae los mismos valores que el aplicativo, pero en otras filas. "
+                                   "Parece que se ordenó solo esa columna, y los datos quedarían en la persona "
+                                   "equivocada. Descargue la base de nuevo y, si va a ordenar, seleccione toda la tabla.")
+                break
     return plan
 
 
@@ -2065,42 +2122,47 @@ def obtener_hoja_bitacora_seg(spreadsheet):
         return hoja
 
 
-def aplicar_carga_seg(spreadsheet, plan, usuario):
+def aplicar_carga_seg(spreadsheet, plan, cambios, usuario):
     """Escribe solo las celdas que cambian y las relee. Devuelve (celdas confirmadas, celdas que fallaron)."""
-    if not plan["cambios"]:
+    if not cambios:
         return 0, []
     hoja = obtener_hoja_datos(spreadsheet)
     pos = plan["pos"]
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # La bitácora se escribe primero: con el valor anterior de cada celda, la carga se puede revertir
+    # La bitácora se escribe primero: con la fila y el valor anterior de cada celda, la carga se puede revertir
     obtener_hoja_bitacora_seg(spreadsheet).append_rows(
-        [[ahora, usuario, c["id"], c["documento"], c["columna"], c["antes"], c["despues"]]
-         for c in plan["cambios"]],
+        [[ahora, usuario, c["fila"], c["id"], c["documento"], c["columna"], c["antes"], c["despues"]]
+         for c in cambios],
         value_input_option="RAW", table_range="A1")
 
-    rangos = [{"range": f"{col_num_a_letra(pos[c['columna']] + 1)}{c['fila']}", "values": [[c["despues"]]]}
-              for c in plan["cambios"]]
-    for fila in {c["fila"] for c in plan["cambios"]}:
-        rangos.append({"range": f"{col_num_a_letra(pos['ultima_modificacion_por'] + 1)}{fila}",
-                       "values": [[usuario]]})
-        rangos.append({"range": f"{col_num_a_letra(pos['ultima_modificacion_fecha'] + 1)}{fila}",
-                       "values": [[ahora]]})
+    por_fila = {}
+    for c in cambios:
+        por_fila.setdefault(c["fila"], []).append(c)
 
-    # RAW: un texto que empiece por «=» queda como texto y una fecha no cambia de formato
-    for i in range(0, len(rangos), 1000):
-        hoja.batch_update(rangos[i:i + 1000], value_input_option="RAW")
+    # RAW: una fecha no cambia de formato. Los datos de un caso y su firma van siempre en el mismo envío
+    lote = []
+    for fila, celdas in por_fila.items():
+        lote += [{"range": f"{col_num_a_letra(pos[c['columna']] + 1)}{fila}", "values": [[c["despues"]]]} for c in celdas]
+        lote.append({"range": f"{col_num_a_letra(pos['ultima_modificacion_por'] + 1)}{fila}", "values": [[usuario]]})
+        lote.append({"range": f"{col_num_a_letra(pos['ultima_modificacion_fecha'] + 1)}{fila}", "values": [[ahora]]})
+        if len(lote) >= 1000:
+            hoja.batch_update(lote, value_input_option="RAW")
+            lote = []
+    if lote:
+        hoja.batch_update(lote, value_input_option="RAW")
 
     if "_datos_cache_time" in st.session_state:
         st.session_state["_datos_cache_time"] = 0
 
     valores = hoja.get_all_values()
     fallas = []
-    for c in plan["cambios"]:
+    for c in cambios:
         f = (valores[c["fila"] - 1] + [""] * len(pos))[:len(pos)] if c["fila"] <= len(valores) else [""] * len(pos)
-        if f[pos["id"]].strip() != c["id"] or _clave_seg(f[pos[c["columna"]]]) != _clave_seg(c["despues"]):
+        if (f[pos["id"]].strip() != c["id"] or _clave_seg(f[pos[c["columna"]]]) != _clave_seg(c["despues"])
+                or f[pos["ultima_modificacion_fecha"]].strip() != ahora):
             fallas.append(c)
-    return len(plan["cambios"]) - len(fallas), fallas
+    return len(cambios) - len(fallas), fallas
 
 
 def modulo_carga_seguimientos(spreadsheet):
@@ -2118,7 +2180,8 @@ def modulo_carga_seguimientos(spreadsheet):
     st.info("**Cómo funciona**\n\n"
             "1. Descargue la base en **📥 Exportar Datos**, siempre la más reciente, y llene los seguimientos "
             "en ese Excel.\n"
-            "2. No cambie las columnas `id`, `numero_documento` ni `ultima_modificacion_fecha`, y no agregue casos.\n"
+            "2. No cambie las columnas `id`, `numero_documento` ni `ultima_modificacion_fecha`, y no agregue casos. "
+            "Si va a ordenar, seleccione toda la tabla: ordenar solo una parte deja los datos en otra persona.\n"
             "3. Suba el archivo aquí, revise el resumen y confirme. Nada se guarda antes de confirmar.\n\n"
             "Solo se actualizan los casos que ya están en el aplicativo, que son los que vienen del SIVIGILA. "
             "Una celda vacía no borra lo que ya está registrado.")
@@ -2138,11 +2201,17 @@ def modulo_carga_seguimientos(spreadsheet):
         libro = pd.ExcelFile(archivo)
         pestana = "TODOS_LOS_DATOS" if "TODOS_LOS_DATOS" in libro.sheet_names else libro.sheet_names[0]
         df_arch = pd.read_excel(libro, sheet_name=pestana, dtype=str, keep_default_na=False)
-        df_arch.columns = [str(c).strip() for c in df_arch.columns]
+        df_arch.columns = [_nombre_col_seg(c) for c in df_arch.columns]
     except Exception as e:
         st.error(f"❌ Error al leer el archivo: {e}")
         return
+    if len(libro.sheet_names) > 1:
+        st.caption(f"El archivo trae varias pestañas; se leyó «{pestana}».")
 
+    repetidas = sorted(set(df_arch.columns[df_arch.columns.duplicated()]))
+    if repetidas:
+        st.error(f"❌ Estas columnas están repetidas en el archivo: {', '.join(repetidas)}.")
+        return
     faltan = [c for c in ("id", "numero_documento", "ultima_modificacion_fecha") if c not in df_arch.columns]
     if faltan:
         st.error(f"❌ Al archivo le falta: {', '.join(faltan)}. Use el Excel que descarga en 📥 Exportar Datos.")
@@ -2150,27 +2219,44 @@ def modulo_carga_seguimientos(spreadsheet):
     if not any(c in df_arch.columns for c in COLUMNAS_CARGA_SEG):
         st.error("❌ El archivo no trae ninguna de las columnas de seguimiento.")
         return
+    extras = [c for c in df_arch.columns if c not in COLUMNAS_DATOS and df_arch[c].map(_texto_seg).any()]
+    if extras:
+        st.warning("⚠️ Estas columnas de su archivo no son del aplicativo y no se cargan: "
+                   f"{', '.join(extras)}. Si traen seguimientos, páselos a las columnas del aplicativo.")
 
     rol = st.session_state.get("rol")
     eps = st.session_state.get("eps_asignada", "")
     hoja = obtener_hoja_datos(spreadsheet)
-    with st.spinner("Comparando el archivo con el aplicativo..."):
-        plan = planear_carga_seg(df_arch, hoja.get_all_values(), rol, eps)
+    try:
+        with st.spinner("Comparando el archivo con el aplicativo..."):
+            plan = planear_carga_seg(df_arch, hoja.get_all_values(), rol, eps)
+    except Exception as e:
+        st.error(f"❌ No se pudo leer el aplicativo: {e}. Espere un minuto e inténtelo de nuevo.")
+        return
 
-    n_casos = len({c["id"] for c in plan["cambios"]})
+    if plan["bloqueo"]:
+        st.error(f"❌ No se puede cargar este archivo. {plan['bloqueo']}")
+        return
+
+    clave_incluir = f"carga_seg_reemplazar_{archivo.name}_{archivo.size}"
+    incluir = st.session_state.get(clave_incluir, False)
+    a_aplicar = [c for c in plan["cambios"] if incluir or not c["reemplaza"]]
+    n_casos = len({c["id"] for c in a_aplicar})
+
     st.markdown("---")
     st.markdown("### 📊 Resumen")
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Filas en el archivo", plan["filas"])
     c2.metric("Casos a actualizar", n_casos)
-    c3.metric("Celdas que cambian", len(plan["cambios"]))
+    c3.metric("Celdas que cambian", len(a_aplicar))
     c4.metric("Casos sin cambios", plan["sin_cambios"])
     c5.metric("Casos rechazados", len(plan["rechazos"]))
     c6.metric("Celdas en conflicto", len(plan["conflictos"]))
 
     if plan["rechazos"]:
-        st.error(f"❌ {_cant_seg(len(plan['rechazos']), 'fila no se cargará', 'filas no se cargarán')}. "
-                 f"{'Corríjala' if len(plan['rechazos']) == 1 else 'Corríjalas'} en el Excel y vuelva a subirlo.")
+        n_r = len(plan["rechazos"])
+        st.error(f"❌ {_cant_seg(n_r, 'fila no se cargará', 'filas no se cargarán')}. "
+                 f"{'Corríjala' if n_r == 1 else 'Corríjalas'} en el Excel y vuelva a subirlo.")
         st.dataframe(pd.DataFrame(plan["rechazos"]), use_container_width=True, hide_index=True)
 
     if plan["conflictos"]:
@@ -2184,12 +2270,24 @@ def modulo_carga_seguimientos(spreadsheet):
         st.warning("⚠️ Estas columnas no se cargan por aquí y sus cambios se ignoraron: "
                    f"{detalle}. Para corregirlas use ✏️ Editar / Actualizar Caso.")
 
-    if not plan["cambios"]:
+    reemplazos = [c for c in plan["cambios"] if c["reemplaza"]]
+    if reemplazos:
+        st.warning(f"⚠️ {_cant_seg(len(reemplazos), 'celda reemplazaría', 'celdas reemplazarían')} un texto o una "
+                   "fecha ya registrados por otro distinto. Revise que sea lo que quiere; si no marca la casilla, "
+                   "no se cambian.")
+        st.dataframe(pd.DataFrame(reemplazos).rename(columns={
+            "paciente": "Caso", "documento": "Documento", "columna": "Columna",
+            "antes": "Valor actual", "despues": "Valor nuevo"})[
+                ["Caso", "Documento", "Columna", "Valor actual", "Valor nuevo"]],
+            use_container_width=True, hide_index=True)
+        st.checkbox("Reemplazar también estos valores", value=False, key=clave_incluir)
+
+    if not a_aplicar:
         st.warning("⚠️ No hay cambios para guardar.")
         return
 
     st.markdown("### 👁️ Vista previa de los cambios")
-    vista = pd.DataFrame(plan["cambios"]).rename(columns={
+    vista = pd.DataFrame(a_aplicar).rename(columns={
         "paciente": "Caso", "documento": "Documento", "columna": "Columna",
         "antes": "Valor actual", "despues": "Valor nuevo"})
     st.dataframe(vista[["Caso", "Documento", "Columna", "Valor actual", "Valor nuevo"]].head(300),
@@ -2201,17 +2299,27 @@ def modulo_carga_seguimientos(spreadsheet):
     texto_boton = f"✅ Confirmar y actualizar {_cant_seg(n_casos, 'caso', 'casos')}"
     if st.button(texto_boton, type="primary", use_container_width=True):
         with st.spinner("Guardando..."):
-            # Se vuelve a leer la hoja justo antes de escribir, por si alguien cambió algo o entraron filas
-            plan = planear_carga_seg(df_arch, hoja.get_all_values(), rol, eps)
             try:
-                ok, fallas = aplicar_carga_seg(spreadsheet, plan, st.session_state.get("nombre_completo", ""))
+                # Se vuelve a leer la hoja justo antes de escribir, por si alguien cambió algo o entraron filas
+                plan = planear_carga_seg(df_arch, hoja.get_all_values(), rol, eps)
+                if plan["bloqueo"]:
+                    st.error(f"❌ No se guardó nada. {plan['bloqueo']}")
+                    return
+                a_aplicar = [c for c in plan["cambios"] if incluir or not c["reemplaza"]]
+                if not a_aplicar:
+                    st.warning("⚠️ El aplicativo cambió mientras revisaba: ya no hay cambios para guardar. "
+                               "Vuelva a subir el archivo para ver el resumen actualizado.")
+                    return
+                ok, fallas = aplicar_carga_seg(spreadsheet, plan, a_aplicar, st.session_state.get("nombre_completo", ""))
             except Exception as e:
                 st.error(f"❌ No se pudo terminar de guardar: {e}. Vuelva a subir el mismo archivo: "
                          "solo se aplicará lo que falte.")
                 return
         if fallas:
-            st.error(f"❌ {_cant_seg(len(fallas), 'celda no quedó guardada', 'celdas no quedaron guardadas')}. "
-                     "Vuelva a subir el mismo archivo.")
+            st.error(f"❌ {_cant_seg(len(fallas), 'celda no quedó', 'celdas no quedaron')} como se esperaba. "
+                     "Avise a la Secretaría: la pestaña BITACORA_SEGUIMIENTOS tiene el valor anterior.")
+            st.dataframe(pd.DataFrame(fallas)[["id", "documento", "columna", "despues"]],
+                         use_container_width=True, hide_index=True)
         else:
             st.success(f"🎉 Carga terminada: "
                        f"{_cant_seg(ok, 'celda guardada y comprobada', 'celdas guardadas y comprobadas')} "
